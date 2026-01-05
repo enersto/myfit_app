@@ -1,6 +1,4 @@
-这是一个为您生成的标准 `README.md` 文件，涵盖了 **myFit V4.5** 的所有核心功能、使用指南以及技术栈介绍。您可以直接将其复制到项目的根目录下。
 
----
 
 # myFit - Personal Workout Tracker (V4.1)
 
