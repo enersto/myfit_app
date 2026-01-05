@@ -7,7 +7,7 @@
 🚀 **V4.1 版本全新升级**：支持 5 种语言、可视化的周计划编排以及体重数据的深度融合。
 
 ---
-English Version 
+[English Version]https://github.com/enersto/myfit_app/blob/main/READEME-en.md
 
 ## ✨ 核心功能 (Features)
 
