@@ -14,11 +14,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            // 获取 VM 以监听主题变化
             val viewModel: MainViewModel = viewModel()
-            val theme by viewModel.currentTheme.collectAsState()
+            val currentTheme by viewModel.currentTheme.collectAsState()
 
-            MyFitTheme(appTheme = theme) {
+            // 修正：直接把 currentTheme (AppTheme类型) 传给 Theme
+            MyFitTheme(appTheme = currentTheme) {
                 MainScreen()
             }
         }

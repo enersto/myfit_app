@@ -1,7 +1,9 @@
 package com.example.myfit.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -12,79 +14,266 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.MonitorWeight
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.navigation.NavController // 新增引用
+import androidx.navigation.NavController
 import com.example.myfit.model.*
 import com.example.myfit.viewmodel.MainViewModel
+import kotlinx.coroutines.delay
 import java.time.LocalDate
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.PI
+import kotlin.random.Random
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DailyPlanScreen(viewModel: MainViewModel, navController: NavController) { // 修改这里：增加 navController 参数
+fun DailyPlanScreen(viewModel: MainViewModel, navController: NavController) {
     val date by viewModel.selectedDate.collectAsState()
     val dayType by viewModel.todayScheduleType.collectAsState()
     val tasks by viewModel.todayTasks.collectAsState(initial = emptyList())
     val showWeightAlert by viewModel.showWeightAlert.collectAsState()
-
     val progress = if (tasks.isEmpty()) 0f else tasks.count { it.isCompleted } / tasks.size.toFloat()
-
-    // 使用 MaterialTheme 的颜色，而不是硬编码，以支持主题切换
     val themeColor = MaterialTheme.colorScheme.primary
 
     var showAddSheet by remember { mutableStateOf(false) }
     var showWeightDialog by remember { mutableStateOf(false) }
+    var showExplosion by remember { mutableStateOf(false) }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background, // 跟随主题
-        floatingActionButton = {
-            if (dayType != DayType.REST) {
-                FloatingActionButton(
-                    onClick = { showAddSheet = true },
-                    containerColor = themeColor
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Task", tint = Color.White)
-                }
-            }
-        }
-    ) { padding ->
-        Column(modifier = Modifier.padding(padding).padding(16.dp)) {
-            HeaderSection(date, dayType, progress, themeColor, showWeightAlert) { showWeightDialog = true }
-            Spacer(modifier = Modifier.height(20.dp))
-
-            if (tasks.isEmpty()) {
-                EmptyState(dayType)
-            } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(tasks, key = { it.id }) { task ->
-                        BubbleTaskItem(task, themeColor, viewModel)
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
+            floatingActionButton = {
+                if (dayType != DayType.REST) {
+                    FloatingActionButton(onClick = { showAddSheet = true }, containerColor = themeColor) {
+                        Icon(Icons.Default.Add, contentDescription = "Add", tint = Color.White)
                     }
-                    item { Spacer(modifier = Modifier.height(80.dp)) }
+                }
+            }
+        ) { padding ->
+            Column(modifier = Modifier.padding(padding).padding(16.dp)) {
+                HeaderSection(date, dayType, progress, themeColor, showWeightAlert) { showWeightDialog = true }
+                Spacer(modifier = Modifier.height(20.dp))
+
+                if (tasks.isEmpty()) {
+                    EmptyState(dayType) { viewModel.applyWeeklyRoutineToToday() }
+                } else {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        items(tasks, key = { it.id }) { task ->
+                            SwipeToDeleteContainer(item = task, onDelete = { viewModel.removeTask(task) }) {
+                                BubbleTaskItem(task, themeColor, viewModel) { showExplosion = true }
+                            }
+                        }
+                        item { Spacer(modifier = Modifier.height(80.dp)) }
+                    }
+                }
+            }
+        }
+
+        if (showExplosion) ExplosionEffect { showExplosion = false }
+        if (showAddSheet) AddExerciseSheet(viewModel, navController) { showAddSheet = false }
+        if (showWeightDialog) WeightDialog(viewModel) { showWeightDialog = false }
+    }
+}
+
+@Composable
+fun BubbleTaskItem(task: WorkoutTask, themeColor: Color, viewModel: MainViewModel, onComplete: () -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val isCompleted = task.isCompleted
+
+    // V4.1 样式优化：完成变灰，未完成白色
+    val cardBgColor = if (isCompleted) Color(0xFFF0F0F0) else MaterialTheme.colorScheme.surface
+    val contentAlpha = if (isCompleted) 0.5f else 1f
+
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
+        colors = CardDefaults.cardColors(containerColor = cardBgColor),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isCompleted) 0.dp else 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+
+                // 左侧文字区域
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = task.name,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        textDecoration = if (isCompleted) androidx.compose.ui.text.style.TextDecoration.LineThrough else null
+                    )
+                    if (!expanded) {
+                        Text(
+                            text = if (task.actualWeight.isNotEmpty()) "${task.target} @ ${task.actualWeight}" else task.target,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f * contentAlpha),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                // V4.1 药丸按钮 (Pill Button)
+                PillCheckButton(
+                    isCompleted = isCompleted,
+                    color = themeColor,
+                    onClick = {
+                        val newState = !task.isCompleted
+                        viewModel.updateTask(task.copy(isCompleted = newState))
+                        if (newState) onComplete()
+                    }
+                )
+            }
+
+            // 展开后的编辑区
+            AnimatedVisibility(visible = expanded) {
+                Column(modifier = Modifier.padding(top = 12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("目标", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.width(40.dp))
+                        BasicTextField(
+                            value = task.target,
+                            onValueChange = { viewModel.updateTask(task.copy(target = it)) },
+                            textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp),
+                            cursorBrush = SolidColor(themeColor),
+                            modifier = Modifier.weight(1f).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(4.dp)).padding(8.dp)
+                        )
+                    }
+                    if (task.type == "STRENGTH") {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("实测", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.width(40.dp))
+                            BasicTextField(
+                                value = task.actualWeight,
+                                onValueChange = { viewModel.updateTask(task.copy(actualWeight = it)) },
+                                textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp),
+                                cursorBrush = SolidColor(themeColor),
+                                modifier = Modifier.weight(1f).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(4.dp)).padding(8.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
     }
+}
 
-    if (showAddSheet) {
-        // 传递 navController 给弹窗
-        AddExerciseSheet(viewModel, navController) { showAddSheet = false }
+@Composable
+fun PillCheckButton(isCompleted: Boolean, color: Color, onClick: () -> Unit) {
+    val scale by animateFloatAsState(if (isCompleted) 0.95f else 1f)
+
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.height(36.dp).scale(scale),
+        shape = RoundedCornerShape(50),
+        color = if (isCompleted) Color.LightGray else color,
+        contentColor = Color.White
+    ) {
+        Box(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            if (isCompleted) {
+                Text("已完成", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            } else {
+                Text("打卡", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+        }
     }
+}
 
-    if (showWeightDialog) {
-        WeightDialog(viewModel) { showWeightDialog = false }
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun <T> SwipeToDeleteContainer(
+    item: T,
+    onDelete: (T) -> Unit,
+    content: @Composable () -> Unit
+) {
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = {
+            if (it == SwipeToDismissBoxValue.EndToStart) {
+                onDelete(item)
+                true
+            } else false
+        }
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        backgroundContent = {
+            val color = Color.Red
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(color, RoundedCornerShape(16.dp))
+                    .padding(end = 24.dp),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.White)
+            }
+        },
+        content = { content() }
+    )
+}
+
+@Composable
+fun ExplosionEffect(onDismiss: () -> Unit) {
+    val particles = remember { List(20) { Particle() } }
+    var visible by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        delay(1000)
+        visible = false
+        onDismiss()
+    }
+    if (visible) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("🎉", fontSize = 100.sp)
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val center = this.center
+                particles.forEach { p ->
+                    val x = center.x + p.radius * cos(p.angle)
+                    val y = center.y + p.radius * sin(p.angle)
+                    drawCircle(color = p.color, radius = 8f, center = Offset(x.toFloat(), y.toFloat()))
+                    p.update()
+                }
+            }
+        }
+    }
+}
+class Particle {
+    var angle = Random.nextDouble(0.0, 2 * PI)
+    var radius = 0.0
+    var speed = Random.nextDouble(10.0, 30.0)
+    val color = listOf(Color.Red, Color.Yellow, Color.Blue, Color.Green).random()
+    fun update() { radius += speed }
+}
+
+@Composable
+fun EmptyState(dayType: DayType, onApplyRoutine: () -> Unit) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            if (dayType == DayType.REST) {
+                Text("💤 休息日", color = Color.Gray, style = MaterialTheme.typography.bodyLarge)
+            } else {
+                Text("今日暂无安排", color = Color.Gray, style = MaterialTheme.typography.bodyLarge)
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(onClick = onApplyRoutine) { Text("应用今日周计划") }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("或点击右下角 + 号", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+            }
+        }
     }
 }
 
@@ -135,92 +324,6 @@ fun HeaderSection(
     }
 }
 
-@Composable
-fun BubbleTaskItem(task: WorkoutTask, themeColor: Color, viewModel: MainViewModel) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { expanded = !expanded },
-        colors = CardDefaults.cardColors(
-            containerColor = if (task.isCompleted) themeColor.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surface
-        ),
-        shape = RoundedCornerShape(16.dp),
-        border = if (task.isCompleted) BorderStroke(1.dp, themeColor) else null
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .background(if (task.isCompleted) themeColor else Color.Transparent)
-                        .border(2.dp, if (task.isCompleted) themeColor else Color.Gray, CircleShape)
-                        .clickable { viewModel.updateTask(task.copy(isCompleted = !task.isCompleted)) },
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (task.isCompleted) {
-                        Icon(Icons.Default.Close, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(16.dp))
-                    }
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = task.name,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        style = MaterialTheme.typography.titleMedium,
-                        textDecoration = if (task.isCompleted) androidx.compose.ui.text.style.TextDecoration.LineThrough else null
-                    )
-                    if (!expanded) {
-                        Text(
-                            text = if (task.actualWeight.isNotEmpty()) "${task.target} @ ${task.actualWeight}kg" else task.target,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                }
-                if (expanded) {
-                    IconButton(onClick = { viewModel.removeTask(task) }) {
-                        Icon(Icons.Default.Close, contentDescription = "Delete", tint = Color.Gray)
-                    }
-                }
-            }
-            AnimatedVisibility(visible = expanded) {
-                Column(modifier = Modifier.padding(top = 12.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("目标: ", color = Color.Gray, fontSize = 14.sp)
-                        BasicTextField(
-                            value = task.target,
-                            onValueChange = { viewModel.updateTask(task.copy(target = it)) },
-                            textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp),
-                            cursorBrush = SolidColor(themeColor),
-                            modifier = Modifier.weight(1f).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(4.dp)).padding(8.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    if (task.type == "STRENGTH") {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("实测: ", color = Color.Gray, fontSize = 14.sp)
-                            BasicTextField(
-                                value = task.actualWeight,
-                                onValueChange = { viewModel.updateTask(task.copy(actualWeight = it)) },
-                                textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp),
-                                cursorBrush = SolidColor(themeColor),
-                                modifier = Modifier.width(80.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(4.dp)).padding(8.dp),
-                                decorationBox = { inner ->
-                                    if (task.actualWeight.isEmpty()) Text("kg", color = Color.Gray)
-                                    inner()
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddExerciseSheet(viewModel: MainViewModel, navController: NavController, onDismiss: () -> Unit) {
@@ -233,11 +336,10 @@ fun AddExerciseSheet(viewModel: MainViewModel, navController: NavController, onD
         Column(modifier = Modifier.padding(16.dp)) {
             Text("添加动作到今日", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
 
-            // --- V3.0 新增：快捷跳转到动作管理 ---
             Button(
                 onClick = {
-                    onDismiss() // 先关弹窗
-                    navController.navigate("exercise_manager") // 再跳转
+                    onDismiss()
+                    navController.navigate("exercise_manager")
                 },
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
@@ -247,7 +349,6 @@ fun AddExerciseSheet(viewModel: MainViewModel, navController: NavController, onD
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("新建 / 管理动作库", color = MaterialTheme.colorScheme.onPrimaryContainer)
             }
-            // ------------------------------------
 
             Divider(color = Color.Gray.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 8.dp))
 
@@ -281,29 +382,11 @@ fun WeightDialog(viewModel: MainViewModel, onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         title = { Text("记录体重") },
         text = {
-            OutlinedTextField(
-                value = weightInput,
-                onValueChange = { weightInput = it },
-                label = { Text("KG") },
-                singleLine = true
-            )
+            OutlinedTextField(value = weightInput, onValueChange = { weightInput = it }, label = { Text("KG") }, singleLine = true)
         },
         confirmButton = {
-            Button(onClick = {
-                weightInput.toFloatOrNull()?.let { viewModel.logWeight(it) }
-                onDismiss()
-            }) { Text("保存") }
-        }
+            Button(onClick = { weightInput.toFloatOrNull()?.let { viewModel.logWeight(it) }; onDismiss() }) { Text("保存") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
     )
-}
-
-@Composable
-fun EmptyState(dayType: DayType) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        if (dayType == DayType.REST) {
-            Text("💤 休息日\n好好恢复，无需训练", color = Color.Gray, style = MaterialTheme.typography.bodyLarge, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-        } else {
-            Text("点击右下角 + 号\n从库中选择今天的训练内容", color = Color.Gray, style = MaterialTheme.typography.bodyLarge, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-        }
-    }
 }

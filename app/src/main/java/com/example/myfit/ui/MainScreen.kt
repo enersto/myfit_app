@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState // 关键引用
 import androidx.navigation.compose.rememberNavController
 import com.example.myfit.viewmodel.MainViewModel
 
@@ -18,14 +19,16 @@ import com.example.myfit.viewmodel.MainViewModel
 fun MainScreen() {
     val navController = rememberNavController()
     val viewModel: MainViewModel = viewModel()
-
-    // 监听主题，确保底部导航栏颜色也跟随
     val currentTheme by viewModel.currentTheme.collectAsState()
+
+    // V4.0 Bug Fix: 显式监听路由堆栈变化
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
 
     Scaffold(
         bottomBar = {
             NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface, // 跟随主题
+                containerColor = MaterialTheme.colorScheme.surface,
                 contentColor = MaterialTheme.colorScheme.onSurface
             ) {
                 val items = listOf(
@@ -34,12 +37,21 @@ fun MainScreen() {
                     Triple("设置", Icons.Default.EditCalendar, "schedule")
                 )
                 items.forEach { (label, icon, route) ->
-                    val isSelected = navController.currentDestination?.route == route
+                    // 修复：使用实时监听的 currentRoute 进行对比
+                    val isSelected = currentRoute == route
                     NavigationBarItem(
                         icon = { Icon(icon, contentDescription = null) },
                         label = { Text(label) },
                         selected = isSelected,
-                        onClick = { navController.navigate(route) },
+                        onClick = {
+                            if (currentRoute != route) {
+                                navController.navigate(route) {
+                                    popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            }
+                        },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = MaterialTheme.colorScheme.onPrimary,
                             selectedTextColor = MaterialTheme.colorScheme.primary,
@@ -51,7 +63,7 @@ fun MainScreen() {
         }
     ) { innerPadding ->
         NavHost(navController, startDestination = "home", modifier = Modifier.padding(innerPadding)) {
-            composable("home") { DailyPlanScreen(viewModel, navController) } // 传 nav 用于快捷跳转
+            composable("home") { DailyPlanScreen(viewModel, navController) }
             composable("history") { HistoryScreen(viewModel) }
             composable("schedule") { ScheduleScreen(navController, viewModel) }
             composable("exercise_manager") { ExerciseManagerScreen(navController, viewModel) }

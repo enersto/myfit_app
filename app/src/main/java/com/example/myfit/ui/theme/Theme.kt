@@ -1,6 +1,8 @@
 package com.example.myfit.ui.theme
 
 import android.app.Activity
+import android.os.Build
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -14,39 +16,49 @@ import com.example.myfit.model.AppTheme
 
 @Composable
 fun MyFitTheme(
-    appTheme: AppTheme,
+    appTheme: AppTheme, // 必须与 MainActivity 调用一致
     content: @Composable () -> Unit
 ) {
-    // 根据数据库选的主题，动态生成颜色方案
-    val colorScheme = if (appTheme == AppTheme.DARK) {
+    // 根据 AppTheme 枚举生成颜色方案
+    val primaryColor = Color(appTheme.primary)
+    val background = Color(appTheme.background)
+    val onBackground = Color(appTheme.onBackground)
+
+    // 简单起见，这里直接构造 ColorScheme
+    // 如果是 DARK 主题(ID=0)，强制深色；其他主题强制亮色底，但用对应的主色调
+    val colorScheme = if (appTheme.id == 0) {
         darkColorScheme(
-            primary = Color(appTheme.primary),
-            background = Color(appTheme.background),
-            surface = Color(0xFF1E1E1E), // 深色模式卡片背景
-            onBackground = Color(appTheme.onBackground)
+            primary = primaryColor,
+            background = background,
+            surface = Color(0xFF1E1E1E), // 深灰
+            onPrimary = Color.White,
+            onBackground = Color.White,
+            onSurface = Color.White
         )
     } else {
         lightColorScheme(
-            primary = Color(appTheme.primary),
-            background = Color(appTheme.background),
-            surface = Color.White, // 浅色模式卡片背景
-            onBackground = Color(appTheme.onBackground)
+            primary = primaryColor,
+            background = background,
+            surface = Color.White,
+            onPrimary = Color.White,
+            onBackground = onBackground,
+            onSurface = onBackground
         )
     }
 
+    // 设置状态栏颜色
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            // 设置状态栏颜色与背景一致 (解决颜色不一致问题)
-            window.statusBarColor = colorScheme.background.toArgb()
-            // 如果是深色主题，状态栏文字变白；否则变黑
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = (appTheme != AppTheme.DARK)
+            window.statusBarColor = primaryColor.toArgb()
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = (appTheme.id != 0)
         }
     }
 
     MaterialTheme(
         colorScheme = colorScheme,
+        typography = Typography,
         content = content
     )
 }
