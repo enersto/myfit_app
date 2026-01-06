@@ -21,13 +21,13 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.res.stringResource // 关键引用
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.example.myfit.R // 关键引用
+import com.example.myfit.R
 import com.example.myfit.model.*
 import com.example.myfit.viewmodel.MainViewModel
 import kotlinx.coroutines.delay
@@ -37,6 +37,7 @@ import kotlin.math.sin
 import kotlin.math.PI
 import kotlin.random.Random
 
+// 🔴 关键修复：将 OptIn 注解放在整个文件入口函数上，一劳永逸
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DailyPlanScreen(viewModel: MainViewModel, navController: NavController) {
@@ -72,7 +73,7 @@ fun DailyPlanScreen(viewModel: MainViewModel, navController: NavController) {
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         items(tasks, key = { it.id }) { task ->
                             SwipeToDeleteContainer(item = task, onDelete = { viewModel.removeTask(task) }) {
-                                BubbleTaskItem(task, themeColor, viewModel) { showExplosion = true }
+                                AdvancedTaskItem(task, themeColor, viewModel) { showExplosion = true }
                             }
                         }
                         item { Spacer(modifier = Modifier.height(80.dp)) }
@@ -88,147 +89,17 @@ fun DailyPlanScreen(viewModel: MainViewModel, navController: NavController) {
 }
 
 @Composable
-fun HeaderSection(
-    date: LocalDate,
-    dayType: DayType,
-    progress: Float,
-    color: Color,
-    showAlert: Boolean,
-    onWeightClick: () -> Unit
-) {
-    Column {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = "${date.monthValue} / ${date.dayOfMonth}",
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-                style = MaterialTheme.typography.titleMedium
-            )
-            Spacer(modifier = Modifier.weight(1f))
-            if (showAlert) {
-                Button(
-                    onClick = onWeightClick,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    modifier = Modifier.height(32.dp)
-                ) {
-                    Icon(Icons.Default.MonitorWeight, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    // V4.3: 使用资源引用
-                    Text(stringResource(R.string.log_weight), fontSize = 12.sp)
-                }
-            }
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        // ▼▼▼ 修复点：这里原来是 dayType.label，现在改为 stringResource(dayType.labelResId) ▼▼▼
-        Text(
-            text = stringResource(dayType.labelResId),
-            color = color,
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold
-        )
-        // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
-        Spacer(modifier = Modifier.height(16.dp))
-        LinearProgressIndicator(
-            progress = progress,
-            modifier = Modifier.fillMaxWidth().height(12.dp).clip(RoundedCornerShape(6.dp)),
-            color = color,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant
-        )
-    }
-}
-
-@Composable
-fun EmptyState(dayType: DayType, onApplyRoutine: () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            if (dayType == DayType.REST) {
-                Text(stringResource(R.string.type_rest), color = Color.Gray, style = MaterialTheme.typography.bodyLarge)
-            } else {
-                Text(stringResource(R.string.no_plan), color = Color.Gray, style = MaterialTheme.typography.bodyLarge)
-                Spacer(modifier = Modifier.height(16.dp))
-                Button(onClick = onApplyRoutine) { Text(stringResource(R.string.apply_routine)) }
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(stringResource(R.string.click_add), color = Color.Gray, style = MaterialTheme.typography.bodySmall)
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun AddExerciseSheet(viewModel: MainViewModel, navController: NavController, onDismiss: () -> Unit) {
-    val templates by viewModel.allTemplates.collectAsState(initial = emptyList())
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(stringResource(R.string.add_to_today), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
-
-            Button(
-                onClick = {
-                    onDismiss()
-                    navController.navigate("exercise_manager")
-                },
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Icon(Icons.Default.List, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(stringResource(R.string.new_manage_lib), color = MaterialTheme.colorScheme.onPrimaryContainer)
-            }
-
-            Divider(color = Color.Gray.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 8.dp))
-
-            LazyColumn {
-                items(templates) { template ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                viewModel.addTaskFromTemplate(template)
-                                onDismiss()
-                            }
-                            .padding(vertical = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(template.name, color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp)
-                        Text(template.category, color = Color.Gray, fontSize = 12.sp)
-                    }
-                    Divider(color = MaterialTheme.colorScheme.surfaceVariant)
-                }
-            }
-            Spacer(modifier = Modifier.height(40.dp))
-        }
-    }
-}
-
-@Composable
-fun WeightDialog(viewModel: MainViewModel, onDismiss: () -> Unit) {
-    var weightInput by remember { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.dialog_weight_title)) },
-        text = {
-            OutlinedTextField(value = weightInput, onValueChange = { weightInput = it }, label = { Text("KG") }, singleLine = true)
-        },
-        confirmButton = {
-            Button(onClick = { weightInput.toFloatOrNull()?.let { viewModel.logWeight(it) }; onDismiss() }) { Text(stringResource(R.string.btn_save)) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.btn_cancel)) } }
-    )
-}
-
-// 保持 BubbleTaskItem, PillCheckButton, SwipeToDeleteContainer, ExplosionEffect 不变
-// (但建议将 BubbleTaskItem 里的 "已完成" "打卡" 也替换为 stringResource)
-@Composable
-fun BubbleTaskItem(task: WorkoutTask, themeColor: Color, viewModel: MainViewModel, onComplete: () -> Unit) {
+fun AdvancedTaskItem(task: WorkoutTask, themeColor: Color, viewModel: MainViewModel, onComplete: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     val isCompleted = task.isCompleted
     val cardBgColor = if (isCompleted) Color(0xFFF0F0F0) else MaterialTheme.colorScheme.surface
     val contentAlpha = if (isCompleted) 0.5f else 1f
+
+    val bodyPartRes = getBodyPartResId(task.bodyPart)
+    val bodyPartLabel = if (bodyPartRes != 0) stringResource(bodyPartRes) else task.bodyPart
+
+    val equipRes = getEquipmentResId(task.equipment)
+    val equipLabel = if (equipRes != 0) stringResource(equipRes) else task.equipment
 
     Card(
         modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
@@ -239,9 +110,15 @@ fun BubbleTaskItem(task: WorkoutTask, themeColor: Color, viewModel: MainViewMode
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(text = task.name, color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, textDecoration = if (isCompleted) androidx.compose.ui.text.style.TextDecoration.LineThrough else null)
-                    if (!expanded) {
-                        Text(text = if (task.actualWeight.isNotEmpty()) "${task.target} @ ${task.actualWeight}" else task.target, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f * contentAlpha), style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        text = task.name,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        textDecoration = if (isCompleted) androidx.compose.ui.text.style.TextDecoration.LineThrough else null
+                    )
+                    Row(modifier = Modifier.padding(top = 4.dp)) {
+                        Text(text = "$bodyPartLabel  |  $equipLabel", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                     }
                 }
                 Spacer(modifier = Modifier.width(12.dp))
@@ -251,18 +128,41 @@ fun BubbleTaskItem(task: WorkoutTask, themeColor: Color, viewModel: MainViewMode
                     if (newState) onComplete()
                 })
             }
+
             AnimatedVisibility(visible = expanded) {
-                Column(modifier = Modifier.padding(top = 12.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Target", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.width(40.dp))
-                        BasicTextField(value = task.target, onValueChange = { viewModel.updateTask(task.copy(target = it)) }, textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp), cursorBrush = SolidColor(themeColor), modifier = Modifier.weight(1f).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(4.dp)).padding(8.dp))
+                Column(modifier = Modifier.padding(top = 16.dp)) {
+                    Divider(color = Color.LightGray.copy(alpha = 0.3f))
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.header_set_no), modifier = Modifier.weight(0.5f), fontSize = 12.sp, color = Color.Gray)
+                        Text(stringResource(R.string.header_weight_time), modifier = Modifier.weight(1f), fontSize = 12.sp, color = Color.Gray)
+                        Text(stringResource(R.string.header_reps), modifier = Modifier.weight(1f), fontSize = 12.sp, color = Color.Gray)
                     }
-                    if (task.type == "STRENGTH") {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Actual", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.width(40.dp))
-                            BasicTextField(value = task.actualWeight, onValueChange = { viewModel.updateTask(task.copy(actualWeight = it)) }, textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp), cursorBrush = SolidColor(themeColor), modifier = Modifier.weight(1f).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(4.dp)).padding(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    task.sets.forEachIndexed { index, set ->
+                        SetRow(index, set, themeColor) { updatedSet ->
+                            val newSets = task.sets.toMutableList()
+                            newSets[index] = updatedSet
+                            viewModel.updateTask(task.copy(sets = newSets))
                         }
+                        Spacer(modifier = Modifier.height(6.dp))
+                    }
+
+                    TextButton(
+                        onClick = {
+                            val lastSet = task.sets.lastOrNull()
+                            val newSet = WorkoutSet(
+                                setNumber = task.sets.size + 1,
+                                weightOrDuration = lastSet?.weightOrDuration ?: "",
+                                reps = lastSet?.reps ?: ""
+                            )
+                            viewModel.updateTask(task.copy(sets = task.sets + newSet))
+                        },
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    ) {
+                        Text("+ ${stringResource(R.string.btn_add_set)}")
                     }
                 }
             }
@@ -271,18 +171,94 @@ fun BubbleTaskItem(task: WorkoutTask, themeColor: Color, viewModel: MainViewMode
 }
 
 @Composable
-fun PillCheckButton(isCompleted: Boolean, color: Color, onClick: () -> Unit) {
-    val scale by animateFloatAsState(if (isCompleted) 0.95f else 1f)
-    Surface(onClick = onClick, modifier = Modifier.height(36.dp).scale(scale), shape = RoundedCornerShape(50), color = if (isCompleted) Color.LightGray else color, contentColor = Color.White) {
-        Box(modifier = Modifier.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
-            // V4.3: 使用资源引用
-            if (isCompleted) Text(stringResource(R.string.btn_done), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            else Text(stringResource(R.string.btn_check), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+fun SetRow(index: Int, set: WorkoutSet, color: Color, onUpdate: (WorkoutSet) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("${set.setNumber}", modifier = Modifier.weight(0.5f), fontWeight = FontWeight.Bold, color = Color.Gray)
+
+        Surface(modifier = Modifier.weight(1f).padding(end = 8.dp), color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(4.dp)) {
+            BasicTextField(
+                value = set.weightOrDuration,
+                onValueChange = { onUpdate(set.copy(weightOrDuration = it)) },
+                textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp),
+                singleLine = true,
+                cursorBrush = SolidColor(color),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+            )
+        }
+
+        Surface(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(4.dp)) {
+            BasicTextField(
+                value = set.reps,
+                onValueChange = { onUpdate(set.copy(reps = it)) },
+                textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp),
+                singleLine = true,
+                cursorBrush = SolidColor(color),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+            )
         }
     }
 }
 
-// SwipeToDeleteContainer, ExplosionEffect 保持不变，直接复制即可
+@Composable
+fun HeaderSection(date: LocalDate, dayType: DayType, progress: Float, color: Color, showWeightAlert: Boolean, onWeightClick: () -> Unit) {
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Text("${date.monthValue} / ${date.dayOfMonth}", style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.weight(1f))
+            if (showWeightAlert) Button(onClick = onWeightClick, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)), modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 8.dp)) { Text(stringResource(R.string.log_weight), fontSize = 12.sp) }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(stringResource(dayType.labelResId), color = color, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(16.dp))
+        LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth().height(12.dp).clip(RoundedCornerShape(6.dp)), color = color, trackColor = MaterialTheme.colorScheme.surfaceVariant)
+    }
+}
+
+@Composable
+fun EmptyState(dayType: DayType, onApplyRoutine: () -> Unit) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            if (dayType == DayType.REST) Text(stringResource(R.string.type_rest), color = Color.Gray)
+            else { Text(stringResource(R.string.no_plan)); Button(onClick = onApplyRoutine) { Text(stringResource(R.string.apply_routine)) } }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AddExerciseSheet(viewModel: MainViewModel, navController: NavController, onDismiss: () -> Unit) {
+    val templates by viewModel.allTemplates.collectAsState(initial = emptyList())
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        LazyColumn(modifier = Modifier.padding(16.dp)) {
+            item {
+                Button(onClick = { onDismiss(); navController.navigate("exercise_manager") }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.new_manage_lib)) }
+                Divider(modifier = Modifier.padding(vertical = 8.dp))
+            }
+            items(templates) { t ->
+                Row(modifier = Modifier.fillMaxWidth().clickable { viewModel.addTaskFromTemplate(t); onDismiss() }.padding(12.dp)) { Text(t.name) }
+                Divider()
+            }
+        }
+    }
+}
+
+@Composable
+fun WeightDialog(viewModel: MainViewModel, onDismiss: () -> Unit) {
+    var weightInput by remember { mutableStateOf("") }
+    AlertDialog(onDismissRequest = onDismiss, confirmButton = { Button(onClick = { weightInput.toFloatOrNull()?.let { viewModel.logWeight(it) }; onDismiss() }) { Text(stringResource(R.string.btn_save)) } }, title = { Text(stringResource(R.string.dialog_weight_title)) }, text = { OutlinedTextField(value = weightInput, onValueChange = { weightInput = it }, label = { Text("KG") }) })
+}
+
+@Composable
+fun PillCheckButton(isCompleted: Boolean, color: Color, onClick: () -> Unit) {
+    val scale by animateFloatAsState(if (isCompleted) 0.95f else 1f)
+    Surface(onClick = onClick, modifier = Modifier.height(36.dp).scale(scale), shape = RoundedCornerShape(50), color = if (isCompleted) Color.LightGray else color) {
+        Box(modifier = Modifier.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+            Text(if (isCompleted) stringResource(R.string.btn_done) else stringResource(R.string.btn_check), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+// 🔴 关键修复：直接在此函数上也加上 OptIn，双保险
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun <T> SwipeToDeleteContainer(
@@ -321,11 +297,7 @@ fun <T> SwipeToDeleteContainer(
 fun ExplosionEffect(onDismiss: () -> Unit) {
     val particles = remember { List(20) { Particle() } }
     var visible by remember { mutableStateOf(true) }
-    LaunchedEffect(Unit) {
-        delay(1000)
-        visible = false
-        onDismiss()
-    }
+    LaunchedEffect(Unit) { delay(1000); visible = false; onDismiss() }
     if (visible) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("🎉", fontSize = 100.sp)

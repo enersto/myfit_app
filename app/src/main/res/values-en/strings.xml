@@ -59,4 +59,31 @@
 
     <string name="about_version_format">myFit %1$s</string>
     <string name="about_credit">Designed &amp; Built by enersto and Gemini</string>
+
+    <string name="category_core">Core</string>
+
+    <string name="label_body_part">Body Part</string>
+    <string name="label_equipment">Equipment</string>
+    <string name="label_sets_config">Sets Detail</string>
+
+    <string name="header_set_no">Set</string>
+    <string name="header_weight_time">Kg/Time</string>
+    <string name="header_reps">Reps</string>
+    <string name="btn_add_set">Add Set</string>
+
+    <string name="part_chest">Chest</string>
+    <string name="part_back">Back</string>
+    <string name="part_legs">Legs</string>
+    <string name="part_shoulders">Shoulders</string>
+    <string name="part_arms">Arms</string>
+    <string name="part_abs">Abs/Core</string>
+    <string name="part_cardio">Whole Body</string>
+    <string name="part_other">Other</string>
+
+    <string name="equip_barbell">Barbell</string>
+    <string name="equip_dumbbell">Dumbbell</string>
+    <string name="equip_machine">Machine</string>
+    <string name="equip_cable">Cable</string>
+    <string name="equip_bodyweight">Bodyweight</string>
+    <string name="equip_cardio_machine">Cardio Machine</string>
 </resources>

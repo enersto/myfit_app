@@ -64,4 +64,31 @@
 
     <string name="about_version_format">myFit %1$s</string>
     <string name="about_credit">由enersto &amp; 哈吉米设计开发 </string>
+
+    <string name="category_core">核心</string>
+
+    <string name="label_body_part">训练部位</string>
+    <string name="label_equipment">使用器械</string>
+    <string name="label_sets_config">组数详情</string>
+
+    <string name="header_set_no">组号</string>
+    <string name="header_weight_time">重量/时长</string>
+    <string name="header_reps">次数</string>
+    <string name="btn_add_set">添加组</string>
+
+    <string name="part_chest">胸部</string>
+    <string name="part_back">背部</string>
+    <string name="part_legs">腿部</string>
+    <string name="part_shoulders">肩部</string>
+    <string name="part_arms">手臂</string>
+    <string name="part_abs">腹部/核心</string>
+    <string name="part_cardio">全身/有氧</string>
+    <string name="part_other">其他</string>
+
+    <string name="equip_barbell">杠铃</string>
+    <string name="equip_dumbbell">哑铃</string>
+    <string name="equip_machine">固定器械</string>
+    <string name="equip_cable">龙门架/绳索</string>
+    <string name="equip_bodyweight">徒手/自重</string>
+    <string name="equip_cardio_machine">有氧器械</string>
 </resources>

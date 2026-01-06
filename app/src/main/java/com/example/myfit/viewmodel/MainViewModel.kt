@@ -24,7 +24,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .map { AppTheme.fromId(it) }
         .stateIn(viewModelScope, SharingStarted.Lazily, AppTheme.DARK)
 
-    // 新增：当前语言，默认为 "zh"
     val currentLanguage = dao.getAppSettings()
         .map { it?.languageCode ?: "zh" }
         .stateIn(viewModelScope, SharingStarted.Lazily, "zh")
@@ -43,7 +42,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (record == null) true else ChronoUnit.DAYS.between(LocalDate.parse(record.date), LocalDate.now()) > 7
     }.stateIn(viewModelScope, SharingStarted.Lazily, false)
 
-    // --- 语言切换 ---
     fun switchLanguage(code: String) {
         viewModelScope.launch {
             val currentSetting = dao.getAppSettings().firstOrNull()
@@ -52,7 +50,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // --- 其他原有方法 ---
     fun addRoutineItem(dayOfWeek: Int, template: ExerciseTemplate) {
         viewModelScope.launch {
             dao.insertRoutineItem(WeeklyRoutineItem(dayOfWeek = dayOfWeek, templateId = template.id, name = template.name, target = template.defaultTarget, category = template.category))
@@ -65,12 +62,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val date = _selectedDate.value
             val routineItems = dao.getRoutineForDay(date.dayOfWeek.value)
             if (routineItems.isEmpty()) {
-                // 注意：Toast 里的文字如果想多语言，需要用 context.getString，这里暂略
                 Toast.makeText(getApplication(), "No Routine Found", Toast.LENGTH_SHORT).show()
                 return@launch
             }
             routineItems.forEach { item ->
-                dao.insertTask(WorkoutTask(date = date.toString(), templateId = item.templateId, name = item.name, target = item.target, type = item.category))
+                // 这里我们尽量去匹配 Template 获取最新的部位信息，如果找不到就用默认空
+                val template = dao.getTemplateById(item.templateId)
+                dao.insertTask(WorkoutTask(
+                    date = date.toString(),
+                    templateId = item.templateId,
+                    name = item.name,
+                    category = item.category,
+                    bodyPart = template?.bodyPart ?: "",
+                    equipment = template?.equipment ?: "",
+                    // 如果有预设目标，生成一个默认的空组作为提示
+                    sets = listOf(WorkoutSet(1, "", "")),
+                    target = item.target
+                ))
             }
             Toast.makeText(getApplication(), "Routine Applied", Toast.LENGTH_SHORT).show()
         }
@@ -87,7 +95,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     if (parts.size >= 4) {
                         val day = parts[0].toIntOrNull()
                         if (day != null) {
-                            dao.insertRoutineItem(WeeklyRoutineItem(dayOfWeek = day, templateId = 0, name = parts[1], category = if (parts[2].contains("有氧")) "CARDIO" else "STRENGTH", target = parts[3]))
+                            val catStr = parts[2].uppercase()
+                            val category = when {
+                                catStr.contains("有氧") || catStr.contains("CARDIO") -> "CARDIO"
+                                catStr.contains("核心") || catStr.contains("CORE") -> "CORE"
+                                else -> "STRENGTH"
+                            }
+                            dao.insertRoutineItem(WeeklyRoutineItem(dayOfWeek = day, templateId = 0, name = parts[1], category = category, target = parts[3]))
                             count++
                         }
                     }
@@ -100,8 +114,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun exportHistoryToCsv(context: Context) {
         viewModelScope.launch {
             val records = dao.getHistoryRecordsSync()
-            val sb = StringBuilder().append("Date,Name,Target,Weight,Type\n")
-            records.forEach { sb.append("${it.date},${it.name},${it.target},${it.actualWeight},${it.type}\n") }
+            val sb = StringBuilder().append("Date,Name,Category,BodyPart,Equipment,Sets\n")
+            records.forEach {
+                // 简单的把 sets 转为字符串导出
+                val setsStr = it.sets.joinToString(" | ") { s -> "${s.weightOrDuration}x${s.reps}" }
+                sb.append("${it.date},${it.name},${it.category},${it.bodyPart},${it.equipment},\"$setsStr\"\n")
+            }
             val intent = Intent(Intent.ACTION_SEND).apply {
                 putExtra(Intent.EXTRA_TEXT, sb.toString()); type = "text/plain"; putExtra(Intent.EXTRA_TITLE, "history.csv")
             }
@@ -109,7 +127,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // 切换主题时保持语言
     fun switchTheme(theme: AppTheme) = viewModelScope.launch {
         val currentSetting = dao.getAppSettings().firstOrNull()
         val lang = currentSetting?.languageCode ?: "zh"
@@ -118,7 +135,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun saveTemplate(t: ExerciseTemplate) = viewModelScope.launch { if (t.id == 0L) dao.insertTemplate(t) else dao.updateTemplate(t) }
     fun deleteTemplate(id: Long) = viewModelScope.launch { dao.softDeleteTemplate(id) }
-    fun addTaskFromTemplate(t: ExerciseTemplate) = viewModelScope.launch { dao.insertTask(WorkoutTask(date = _selectedDate.value.toString(), templateId = t.id, name = t.name, target = t.defaultTarget, type = t.category)) }
+
+    // V5.0 修复：从模板添加任务时，复制所有新字段
+    fun addTaskFromTemplate(t: ExerciseTemplate) = viewModelScope.launch {
+        dao.insertTask(WorkoutTask(
+            date = _selectedDate.value.toString(),
+            templateId = t.id,
+            name = t.name,
+            category = t.category,
+            bodyPart = t.bodyPart,
+            equipment = t.equipment,
+            target = t.defaultTarget,
+            // 默认添加第一组空数据方便输入
+            sets = listOf(WorkoutSet(1, "", ""))
+        ))
+    }
+
     fun updateTask(t: WorkoutTask) = viewModelScope.launch { dao.updateTask(t) }
     fun removeTask(t: WorkoutTask) = viewModelScope.launch { dao.deleteTask(t) }
     fun updateScheduleConfig(day: Int, type: DayType) = viewModelScope.launch { dao.insertSchedule(ScheduleConfig(day, type)) }

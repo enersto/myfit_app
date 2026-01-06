@@ -71,4 +71,8 @@ dependencies {
 
     // 图标库 (用于底部导航栏)
     implementation("androidx.compose.material:material-icons-extended:1.6.0")
+
+    implementation("com.google.code.gson:gson:2.10.1") // 新增：用于处理复杂数据结构
+
+
 }
