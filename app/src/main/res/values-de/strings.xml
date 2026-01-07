@@ -38,13 +38,13 @@
     <string name="import_dialog_hint">Format: Tag(1-7),Name,Typ,Ziel</string>
     <string name="import_btn">Importieren</string>
 
-    <string name="week_1">Mo-</string>
-    <string name="week_2">Di-</string>
-    <string name="week_3">Mi-</string>
-    <string name="week_4">Do-</string>
-    <string name="week_5">Fr-</string>
-    <string name="week_6">Sa-</string>
-    <string name="week_7">So-</string>
+    <string name="week_1">Mo. </string>
+    <string name="week_2">Di. </string>
+    <string name="week_3">Mi. </string>
+    <string name="week_4">Do. </string>
+    <string name="week_5">Fr. </string>
+    <string name="week_6">Sa. </string>
+    <string name="week_7">So. </string>
 
     <string name="type_core">Core-Training</string>
     <string name="type_active">Aktive Erholung</string>
@@ -129,4 +129,15 @@
 
     <string name="header_core_train">Rumpftraining</string>
     <string name="chart_title_core_single">Trend: Wiederholungen</string>
+
+    <string name="msg_import_base">%1$d Routine-Elemente importiert</string>
+    <string name="msg_import_new_added">, %1$d neue Übungen automatisch hinzugefügt</string>
+    <string name="msg_import_cleaned">, %1$d Duplikate bereinigt</string>
+    <string name="msg_import_error">Import fehlgeschlagen: %1$s</string>
+
+    <string name="val_default_body_part">part_other</string>
+    <string name="val_default_equipment">equip_other</string>
+
+    <string name="import_csv_template">Tag, Name, Kategorie, Ziel, KörperteilKey, GerätKey\n1, Bankdrücken, STRENGTH, 4x8, part_chest, equip_barbell\n1, Butterfly, STRENGTH, 4x12, part_chest, equip_machine\n2, Laufen, CARDIO, 30min, part_cardio, equip_cardio_machine\n3, Plank, CORE, 3x60s, part_abs, equip_bodyweight</string>
+
 </resources>

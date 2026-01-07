@@ -129,4 +129,14 @@
 
     <string name="header_core_train">核心训练</string>
     <string name="chart_title_core_single">单项核心次数趋势</string>
+
+    <string name="msg_import_base">导入 %1$d 项计划</string>
+    <string name="msg_import_new_added">，自动收录 %1$d 个新动作</string>
+    <string name="msg_import_cleaned">，清理 %1$d 条重复数据</string>
+    <string name="msg_import_error">导入失败：%1$s</string>
+
+    <string name="val_default_body_part">part_other</string>
+    <string name="val_default_equipment">equip_other</string>
+
+    <string name="import_csv_template">星期, 名称, 类别, 目标, 部位Key, 器械Key\n1, 杠铃卧推, STRENGTH, 4x8, part_chest, equip_barbell\n1, 蝴蝶机夹胸, STRENGTH, 4x12, part_chest, equip_machine\n2, 跑步, CARDIO, 30min, part_cardio, equip_cardio_machine\n3, 平板支撑, CORE, 3x60s, part_abs, equip_bodyweight</string>
 </resources>

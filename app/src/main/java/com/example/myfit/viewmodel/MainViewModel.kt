@@ -94,14 +94,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
             routineItems.forEach { item ->
-                // 尝试获取最新模板信息，若无则使用 Routine 中的快照
                 val template = dao.getTemplateById(item.templateId)
                 dao.insertTask(WorkoutTask(
                     date = date.toString(),
                     templateId = item.templateId,
                     name = item.name,
                     category = item.category,
-                    bodyPart = template?.bodyPart ?: item.bodyPart, // 优先用模板最新，其次用Routine快照
+                    bodyPart = template?.bodyPart ?: item.bodyPart,
                     equipment = template?.equipment ?: item.equipment,
                     sets = listOf(WorkoutSet(1, "", "")),
                     target = item.target
@@ -111,59 +110,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // ================== 导入导出与备份 ==================
+    // ================== 导入导出与备份 (修复核心逻辑) ==================
 
-    // V5.2 升级：支持 6 列 CSV 导入
-    fun importWeeklyRoutine(csvContent: String) {
-        viewModelScope.launch {
-            try {
-                dao.clearWeeklyRoutine()
-                val lines = csvContent.lines()
-                var count = 0
-                lines.forEach { line ->
-                    // 兼容中文逗号，并去除空白
-                    val parts = line.replace("，", ",").split(",").map { it.trim() }
-
-                    // 检查是否为有效数据行 (第一列转数字成功)
-                    if (parts.size >= 4 && parts[0].toIntOrNull() != null) {
-                        val day = parts[0].toInt()
-                        val name = parts[1]
-                        val catStr = parts[2].uppercase()
-                        val target = parts[3]
-
-                        // 兼容旧版 CSV (如果没有第5、6列，使用默认值)
-                        val bodyPart = if (parts.size > 4) parts[4] else ""
-                        val equipment = if (parts.size > 5) parts[5] else ""
-
-                        val category = when {
-                            catStr.contains("有氧") || catStr.contains("CARDIO") -> "CARDIO"
-                            catStr.contains("核心") || catStr.contains("CORE") -> "CORE"
-                            else -> "STRENGTH"
-                        }
-
-                        dao.insertRoutineItem(WeeklyRoutineItem(
-                            dayOfWeek = day,
-                            templateId = 0,
-                            name = name,
-                            category = category,
-                            target = target,
-                            bodyPart = bodyPart,
-                            equipment = equipment
-                        ))
-                        count++
-                    }
-                }
-                Toast.makeText(getApplication(), "Imported $count items", Toast.LENGTH_SHORT).show()
-            } catch (e: Exception) {
-                Toast.makeText(getApplication(), "Error: ${e.message}", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
+    // 1. CSV 导出功能 (被报错说找不到的方法)
     fun exportHistoryToCsv(context: Context) {
         viewModelScope.launch {
             val records = dao.getHistoryRecordsSync()
-            // 升级：导出包含 BodyPart 和 Equipment
             val sb = StringBuilder().append("Date,Name,Category,BodyPart,Equipment,Sets\n")
             records.forEach {
                 val setsStr = it.sets.joinToString(" | ") { s -> "${s.weightOrDuration}x${s.reps}" }
@@ -174,23 +126,134 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 type = "text/plain"
                 putExtra(Intent.EXTRA_TITLE, "history.csv")
             }
+            // 使用 Context 启动 Activity
             context.startActivity(Intent.createChooser(intent, context.getString(R.string.export_csv_btn)))
         }
     }
 
-    // 数据库备份 (.db 文件)
+    // 2. CSV 导入功能 (自动入库 + 去重)
+    // 修改处：增加 context 参数
+    fun importWeeklyRoutine(context: Context, csvContent: String) {
+        viewModelScope.launch {
+            // ❌ 删除旧的：val app = getApplication<Application>()
+            try {
+                // 1. 先执行库清理
+                val deletedCount = optimizeExerciseLibrary()
+
+                dao.clearWeeklyRoutine()
+                val lines = csvContent.lines()
+                var importCount = 0
+                var newTemplateCount = 0
+
+                // ✅ 修改处：使用传入的 context 获取资源
+                val defaultPartKey = context.getString(R.string.val_default_body_part)
+                val defaultEquipKey = context.getString(R.string.val_default_equipment)
+
+                lines.forEach { line ->
+                    val parts = line.replace("，", ",").split(",").map { it.trim() }
+
+                    if (parts.size >= 4 && parts[0].toIntOrNull() != null) {
+                        val day = parts[0].toInt()
+                        val name = parts[1]
+                        val catStr = parts[2].uppercase()
+                        val target = parts[3]
+
+                        val bodyPart = if (parts.size > 4 && parts[4].isNotBlank()) parts[4] else defaultPartKey
+                        val equipment = if (parts.size > 5 && parts[5].isNotBlank()) parts[5] else defaultEquipKey
+
+                        val category = when {
+                            catStr.contains("CARDIO") || catStr.contains("有氧") -> "CARDIO"
+                            catStr.contains("CORE") || catStr.contains("核心") -> "CORE"
+                            else -> "STRENGTH"
+                        }
+
+                        // 联动动作库逻辑
+                        var existingTemplate = dao.getTemplateByName(name)
+                        var finalTemplateId: Long
+
+                        if (existingTemplate != null) {
+                            finalTemplateId = existingTemplate.id
+                        } else {
+                            val newTemplate = ExerciseTemplate(
+                                name = name,
+                                defaultTarget = target,
+                                category = category,
+                                bodyPart = bodyPart,
+                                equipment = equipment,
+                                isDeleted = false
+                            )
+                            finalTemplateId = dao.insertTemplate(newTemplate)
+                            newTemplateCount++
+                        }
+
+                        dao.insertRoutineItem(WeeklyRoutineItem(
+                            dayOfWeek = day,
+                            templateId = finalTemplateId,
+                            name = name,
+                            category = category,
+                            target = target,
+                            bodyPart = bodyPart,
+                            equipment = equipment
+                        ))
+                        importCount++
+                    }
+                }
+
+                // 2. 构建提示信息
+                val msg = StringBuilder()
+                // ✅ 修改处：使用 context.getString
+                msg.append(context.getString(R.string.msg_import_base, importCount))
+                if (newTemplateCount > 0) {
+                    msg.append(context.getString(R.string.msg_import_new_added, newTemplateCount))
+                }
+                if (deletedCount > 0) {
+                    msg.append(context.getString(R.string.msg_import_cleaned, deletedCount))
+                }
+
+                // ✅ 修改处：使用 context 显示 Toast
+                Toast.makeText(context, msg.toString(), Toast.LENGTH_LONG).show()
+
+            } catch (e: Exception) {
+                // ✅ 修改处：使用 context
+                val errorMsg = context.getString(R.string.msg_import_error, e.message ?: "Unknown")
+                Toast.makeText(context, errorMsg, Toast.LENGTH_SHORT).show()
+                e.printStackTrace()
+            }
+        }
+    }
+
+    // 3. 动作库去重辅助方法 (被报错说找不到的方法)
+    private suspend fun optimizeExerciseLibrary(): Int {
+        return withContext(Dispatchers.IO) {
+            val allTemplates = dao.getAllTemplatesSync()
+            val grouped = allTemplates.groupBy { it.name }
+            val idsToDelete = mutableListOf<Long>()
+
+            grouped.forEach { (_, templates) ->
+                if (templates.size > 1) {
+                    val sorted = templates.sortedByDescending { it.id }
+                    for (i in 1 until sorted.size) {
+                        idsToDelete.add(sorted[i].id)
+                    }
+                }
+            }
+
+            if (idsToDelete.isNotEmpty()) {
+                dao.softDeleteTemplates(idsToDelete)
+            }
+            idsToDelete.size
+        }
+    }
+
+    // 数据库备份
     fun backupDatabase(uri: android.net.Uri, context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val dbName = "myfit_v7.db"
                 val dbPath = context.getDatabasePath(dbName)
-
                 context.contentResolver.openOutputStream(uri)?.use { output ->
-                    dbPath.inputStream().use { input ->
-                        input.copyTo(output)
-                    }
+                    dbPath.inputStream().use { input -> input.copyTo(output) }
                 }
-
                 withContext(Dispatchers.Main) {
                     Toast.makeText(context, context.getString(R.string.msg_backup_success), Toast.LENGTH_SHORT).show()
                 }
@@ -202,19 +265,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // 数据库恢复 (.db 文件)
+    // 数据库恢复
     fun restoreDatabase(uri: android.net.Uri, context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val dbName = "myfit_v7.db"
                 val dbPath = context.getDatabasePath(dbName)
-
                 context.contentResolver.openInputStream(uri)?.use { input ->
-                    dbPath.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
+                    dbPath.outputStream().use { output -> input.copyTo(output) }
                 }
-
                 withContext(Dispatchers.Main) {
                     Toast.makeText(context, context.getString(R.string.msg_restore_success), Toast.LENGTH_LONG).show()
                 }
@@ -260,26 +319,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     suspend fun getRoutineForDay(day: Int) = dao.getRoutineForDay(day)
 
-    // ================== 图表统计数据逻辑 (V5.3) ==================
+    // ================== 图表统计数据逻辑 ==================
 
-    // 解析数字 (提取字符串中的浮点数)
     private fun parseValue(input: String): Float {
         val regex = Regex("[0-9]+(\\.[0-9]+)?")
         return regex.find(input)?.value?.toFloatOrNull() ?: 0f
     }
 
-    // 解析时长 (支持 "30min", "1h", "90")，统一返回分钟
     private fun parseDuration(input: String): Float {
         val lower = input.lowercase()
         val num = parseValue(lower)
         return when {
             lower.contains("h") -> num * 60
             lower.contains("s") && !lower.contains("m") -> num / 60
-            else -> num // 默认分钟
+            else -> num
         }
     }
 
-    // 通用聚合函数：将原始数据转换为图表点
     private fun <T> aggregateData(
         data: List<T>,
         dateSelector: (T) -> LocalDate,
@@ -292,33 +348,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         return grouped.map { (date, items) ->
-            // 这里我们采用平均值作为聚合策略 (例如月度平均体重，月度平均单次训练时长)
-            // 如果需要总量(如月总容量)，需要在传入 data 之前处理，或者修改此处逻辑。
-            // 简单起见，统一用 Average 表现趋势。
             val value = items.map { valueSelector(it) }.average().toFloat()
-
             val label = if (granularity == ChartGranularity.DAILY)
                 date.format(DateTimeFormatter.ofPattern("MM/dd"))
             else
                 date.format(DateTimeFormatter.ofPattern("yy/MM"))
-
             ChartDataPoint(date, value, label)
         }.sortedBy { it.date }
     }
 
-    // 模块 1: 体重数据
     fun getWeightChartData(granularity: ChartGranularity): Flow<List<ChartDataPoint>> {
         return weightHistory.map { records ->
             val raw = records.map { Pair(LocalDate.parse(it.date), it.weight) }
-            // 每日可能有多次记录，先按日取最新
             val dailyMap = raw.groupBy { it.first }.mapValues { it.value.last().second }
             val dailyList = dailyMap.map { ChartDataPoint(it.key, it.value, "") }
-
             aggregateData(dailyList, { it.date }, { it.value }, granularity)
         }
     }
 
-    // 模块 2: 有氧总时长
     fun getCardioTotalChartData(granularity: ChartGranularity): Flow<List<ChartDataPoint>> {
         return dao.getHistoryRecords().map { tasks ->
             val cardioTasks = tasks.filter { it.category == "CARDIO" }
@@ -332,13 +379,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     }.toFloat()
                 }
-
             val dailyData = dailySums.map { ChartDataPoint(it.key, it.value, "") }
             aggregateData(dailyData, { it.date }, { it.value }, granularity)
         }
     }
 
-    // 获取某类别的所有动作名称
     fun getExerciseNamesByCategory(category: String): Flow<List<String>> {
         return dao.getHistoryRecords().map { tasks ->
             tasks.filter { it.category == category }
@@ -348,25 +393,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // 模块 2b, 3, 4: 单动作趋势 (mode: 0=时长, 1=重量, 2=次数)
     fun getSingleExerciseChartData(name: String, mode: Int, granularity: ChartGranularity): Flow<List<ChartDataPoint>> {
         return dao.getHistoryRecords().map { tasks ->
             val targetTasks = tasks.filter { it.name == name }
-
             val dailyValues = targetTasks.groupBy { LocalDate.parse(it.date) }
                 .mapValues { (_, dayTasks) ->
                     val values = dayTasks.flatMap { task ->
                         if (task.sets.isNotEmpty()) task.sets else listOf(WorkoutSet(1, task.actualWeight.ifEmpty { task.target }, task.target))
                     }
-
                     when (mode) {
-                        0 -> values.sumOf { parseDuration(it.weightOrDuration).toDouble() }.toFloat() // 有氧：总时长
-                        1 -> values.maxOfOrNull { parseValue(it.weightOrDuration) } ?: 0f // 力量：最大重量
-                        2 -> values.sumOf { parseValue(it.reps).toDouble() }.toFloat() // 核心：总次数
+                        0 -> values.sumOf { parseDuration(it.weightOrDuration).toDouble() }.toFloat()
+                        1 -> values.maxOfOrNull { parseValue(it.weightOrDuration) } ?: 0f
+                        2 -> values.sumOf { parseValue(it.reps).toDouble() }.toFloat()
                         else -> 0f
                     }
                 }
-
             val dailyData = dailyValues.map { ChartDataPoint(it.key, it.value, "") }
             aggregateData(dailyData, { it.date }, { it.value }, granularity)
         }

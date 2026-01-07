@@ -1,30 +1,37 @@
 package com.example.myfit.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState // 🟢 新增
-import androidx.compose.foundation.verticalScroll     // 🟢 新增
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.myfit.R
 import com.example.myfit.model.ExerciseTemplate
 import com.example.myfit.viewmodel.MainViewModel
 
+val BODY_PART_OPTIONS = listOf(
+    "part_chest", "part_back", "part_legs", "part_shoulders",
+    "part_arms", "part_abs", "part_cardio", "part_other"
+)
 
-// 1. 定义常量列表，方便后续维护 (放在文件顶层或单独的 Constants 文件中)
 val EQUIPMENT_OPTIONS = listOf(
     "equip_barbell", "equip_dumbbell", "equip_machine", "equip_cable",
     "equip_bodyweight", "equip_cardio_machine", "equip_kettlebell",
@@ -38,77 +45,226 @@ fun ExerciseManagerScreen(navController: NavController, viewModel: MainViewModel
     var showDialog by remember { mutableStateOf(false) }
     var editingTemplate by remember { mutableStateOf<ExerciseTemplate?>(null) }
 
+    val categories = listOf("STRENGTH", "CARDIO", "CORE")
+    var selectedCategory by remember { mutableStateOf("STRENGTH") }
+
     Scaffold(
         topBar = {
-            Row(
-                modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
+            // 顶部只保留标题和返回按钮
+            Column(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.title_manage_exercises),
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                }
+            }
+        },
+        bottomBar = {
+            // 🔴 移至底部：类别 Tab
+            TabRow(
+                selectedTabIndex = categories.indexOf(selectedCategory),
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.primary
             ) {
-                IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(text = stringResource(R.string.title_manage_exercises), style = MaterialTheme.typography.titleLarge)
+                categories.forEach { category ->
+                    Tab(
+                        selected = selectedCategory == category,
+                        onClick = { selectedCategory = category },
+                        text = {
+                            Text(
+                                text = stringResource(getCategoryResId(category)),
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(vertical = 12.dp)
+                            )
+                        }
+                    )
+                }
             }
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { editingTemplate = null; showDialog = true }, containerColor = MaterialTheme.colorScheme.primary) {
+            FloatingActionButton(
+                onClick = {
+                    editingTemplate = null
+                    showDialog = true
+                },
+                containerColor = MaterialTheme.colorScheme.primary
+            ) {
                 Icon(Icons.Default.Add, contentDescription = "Add", tint = Color.White)
             }
         }
     ) { padding ->
-        LazyColumn(modifier = Modifier.padding(padding).fillMaxSize().background(MaterialTheme.colorScheme.background).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            items(templates) { template ->
-                ExerciseItemCard(template = template, onEdit = { editingTemplate = template; showDialog = true }, onDelete = { viewModel.deleteTemplate(template.id) })
+        val groupedData = remember(templates, selectedCategory) {
+            templates
+                .filter { it.category == selectedCategory }
+                .groupBy { it.bodyPart }
+                .mapValues { (_, partList) ->
+                    partList.groupBy { it.equipment }
+                }
+                .toSortedMap { a, b -> a.compareTo(b) }
+        }
+
+        LazyColumn(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (groupedData.isEmpty()) {
+                item {
+                    Box(modifier = Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(stringResource(R.string.chart_no_data), color = Color.Gray)
+                    }
+                }
+            } else {
+                groupedData.forEach { (bodyPartKey, equipmentMap) ->
+                    item(key = bodyPartKey) {
+                        ExpandableBodyPartSection(
+                            bodyPartKey = bodyPartKey,
+                            equipmentMap = equipmentMap,
+                            onEdit = { editingTemplate = it; showDialog = true },
+                            onDelete = { viewModel.deleteTemplate(it.id) }
+                        )
+                    }
+                }
             }
+            // 底部无需太大留白，因为有 bottomBar 撑着，但为了 FAB 还是留一点
+            item { Spacer(modifier = Modifier.height(24.dp)) }
         }
     }
 
     if (showDialog) {
-        ExerciseEditDialog(template = editingTemplate, onDismiss = { showDialog = false }, onSave = { temp -> viewModel.saveTemplate(temp); showDialog = false })
+        ExerciseEditDialog(
+            template = editingTemplate,
+            onDismiss = { showDialog = false },
+            onSave = { temp ->
+                viewModel.saveTemplate(temp)
+                showDialog = false
+            }
+        )
     }
 }
 
 @Composable
-fun ExerciseItemCard(template: ExerciseTemplate, onEdit: () -> Unit, onDelete: () -> Unit) {
-    // 翻译显示
-    val categoryLabel = when (template.category) {
-        "STRENGTH" -> stringResource(R.string.category_strength)
-        "CARDIO" -> stringResource(R.string.category_cardio)
-        "CORE" -> stringResource(R.string.category_core)
-        else -> template.category
-    }
-    // 尝试获取部位的资源显示，如果是自定义字符串则直接显示
-    val bodyPartRes = getBodyPartResId(template.bodyPart)
-    val bodyPartLabel = if (bodyPartRes != 0) stringResource(bodyPartRes) else template.bodyPart
+fun ExpandableBodyPartSection(
+    bodyPartKey: String,
+    equipmentMap: Map<String, List<ExerciseTemplate>>,
+    onEdit: (ExerciseTemplate) -> Unit,
+    onDelete: (ExerciseTemplate) -> Unit
+) {
+    var expanded by remember { mutableStateOf(true) }
+    val rotationState by animateFloatAsState(targetValue = if (expanded) 180f else 0f)
 
-    val equipmentRes = getEquipmentResId(template.equipment)
-    val equipLabel = if (equipmentRes != 0) stringResource(equipmentRes) else template.equipment
+    val bodyPartRes = getBodyPartResId(bodyPartKey)
+    val bodyPartLabel = if (bodyPartRes != 0) stringResource(bodyPartRes) else bodyPartKey
 
-    Card(modifier = Modifier.fillMaxWidth().clickable { onEdit() }, shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = template.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(4.dp))
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+    ) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    LabelTag(categoryLabel, MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
+                    Box(modifier = Modifier.size(8.dp).background(MaterialTheme.colorScheme.primary, RoundedCornerShape(50)))
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = bodyPartLabel,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                     Spacer(modifier = Modifier.width(8.dp))
-                    if (bodyPartLabel.isNotEmpty()) {
-                        LabelTag(bodyPartLabel, MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
-                    if (equipLabel.isNotEmpty()) {
-                        LabelTag(equipLabel, MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer)
+                    val count = equipmentMap.values.sumOf { it.size }
+                    Text("($count)", color = Color.Gray, fontSize = 12.sp)
+                }
+                Icon(
+                    Icons.Default.KeyboardArrowDown,
+                    contentDescription = "Expand",
+                    modifier = Modifier.rotate(rotationState)
+                )
+            }
+
+            AnimatedVisibility(visible = expanded) {
+                Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
+                    Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    equipmentMap.forEach { (equipKey, templates) ->
+                        EquipmentGroup(equipKey, templates, onEdit, onDelete)
+                        Spacer(modifier = Modifier.height(12.dp))
                     }
                 }
             }
-            IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, null, tint = Color.Red.copy(alpha = 0.5f)) }
         }
     }
 }
 
 @Composable
-fun LabelTag(text: String, containerColor: Color, contentColor: Color) {
-    Surface(color = containerColor, shape = RoundedCornerShape(4.dp)) {
-        Text(text = text, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = contentColor)
+fun EquipmentGroup(
+    equipKey: String,
+    templates: List<ExerciseTemplate>,
+    onEdit: (ExerciseTemplate) -> Unit,
+    onDelete: (ExerciseTemplate) -> Unit
+) {
+    val equipRes = getEquipmentResId(equipKey)
+    val equipLabel = if (equipRes != 0) stringResource(equipRes) else equipKey
+
+    Column {
+        Text(
+            text = equipLabel,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(vertical = 4.dp, horizontal = 4.dp)
+        )
+
+        templates.forEach { template ->
+            ExerciseMinimalCard(template, { onEdit(template) }, { onDelete(template) })
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+    }
+}
+
+@Composable
+fun ExerciseMinimalCard(template: ExerciseTemplate, onEdit: () -> Unit, onDelete: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable { onEdit() },
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = template.name, style = MaterialTheme.typography.bodyLarge)
+                if (template.defaultTarget.isNotEmpty()) {
+                    Text(text = template.defaultTarget, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                }
+            }
+            IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
+                Icon(Icons.Default.Delete, null, tint = Color.Red.copy(alpha = 0.4f), modifier = Modifier.size(16.dp))
+            }
+        }
     }
 }
 
@@ -125,39 +281,66 @@ fun ExerciseEditDialog(template: ExerciseTemplate?, onDismiss: () -> Unit, onSav
         onDismissRequest = onDismiss,
         title = { Text(if (template == null) stringResource(R.string.title_new_exercise) else stringResource(R.string.title_edit_exercise)) },
         text = {
-            Column(modifier = Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState())) {
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text(stringResource(R.string.label_name)) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text(stringResource(R.string.label_name)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
                 Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(value = target, onValueChange = { target = it }, label = { Text(stringResource(R.string.label_target)) }, placeholder = { Text(stringResource(R.string.hint_target)) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(
+                    value = target,
+                    onValueChange = { target = it },
+                    label = { Text(stringResource(R.string.label_target)) },
+                    placeholder = { Text(stringResource(R.string.hint_target)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
 
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(stringResource(R.string.label_category), style = MaterialTheme.typography.bodyMedium)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    CategoryRadio(stringResource(R.string.category_strength), category == "STRENGTH") { category = "STRENGTH" }
-                    CategoryRadio(stringResource(R.string.category_cardio), category == "CARDIO") { category = "CARDIO" }
-                    CategoryRadio(stringResource(R.string.category_core), category == "CORE") { category = "CORE" }
+                    listOf("STRENGTH", "CARDIO", "CORE").forEach { cat ->
+                        CategoryRadio(
+                            label = stringResource(getCategoryResId(cat)),
+                            selected = category == cat
+                        ) { category = cat }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
-                // 部位选择器
                 Text(stringResource(R.string.label_body_part), style = MaterialTheme.typography.bodyMedium)
                 ResourceDropdown(
                     currentKey = bodyPart,
-                    options = listOf("part_chest", "part_back", "part_legs", "part_shoulders", "part_arms", "part_abs", "part_cardio", "part_other"),
+                    options = BODY_PART_OPTIONS,
                     onSelect = { bodyPart = it }
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
-                // 器械选择器
                 Text(stringResource(R.string.label_equipment), style = MaterialTheme.typography.bodyMedium)
                 ResourceDropdown(
                     currentKey = equipment,
-                    options = EQUIPMENT_OPTIONS, // 使用新列表
+                    options = EQUIPMENT_OPTIONS,
                     onSelect = { equipment = it }
                 )
             }
         },
-        confirmButton = { Button(onClick = { if (name.isNotBlank()) onSave(ExerciseTemplate(id = template?.id ?: 0, name = name, defaultTarget = target, category = category, bodyPart = bodyPart, equipment = equipment)) }) { Text(stringResource(R.string.btn_save)) } },
+        confirmButton = {
+            Button(onClick = {
+                if (name.isNotBlank()) onSave(
+                    ExerciseTemplate(
+                        id = template?.id ?: 0,
+                        name = name,
+                        defaultTarget = target,
+                        category = category,
+                        bodyPart = bodyPart,
+                        equipment = equipment
+                    )
+                )
+            }) { Text(stringResource(R.string.btn_save)) }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.btn_cancel)) } }
     )
 }
@@ -165,8 +348,8 @@ fun ExerciseEditDialog(template: ExerciseTemplate?, onDismiss: () -> Unit, onSav
 @Composable
 fun CategoryRadio(label: String, selected: Boolean, onClick: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { onClick() }) {
-        RadioButton(selected = selected, onClick = onClick, modifier = Modifier.size(24.dp)) // 缩小一点
-        Text(text = label, style = MaterialTheme.typography.bodySmall)
+        RadioButton(selected = selected, onClick = onClick, modifier = Modifier.size(24.dp))
+        Text(text = label, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 4.dp))
     }
 }
 
@@ -174,7 +357,7 @@ fun CategoryRadio(label: String, selected: Boolean, onClick: () -> Unit) {
 @Composable
 fun ResourceDropdown(currentKey: String, options: List<String>, onSelect: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
-    // 获取当前Key对应的显示文本
+
     val currentResId = getBodyPartResId(currentKey).takeIf { it != 0 } ?: getEquipmentResId(currentKey)
     val displayText = if (currentResId != 0) stringResource(currentResId) else currentKey
 
@@ -184,19 +367,29 @@ fun ResourceDropdown(currentKey: String, options: List<String>, onSelect: (Strin
             onValueChange = {},
             readOnly = true,
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier.menuAnchor().fillMaxWidth()
+            modifier = Modifier.menuAnchor().fillMaxWidth(),
+            textStyle = MaterialTheme.typography.bodySmall
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             options.forEach { key ->
                 val resId = getBodyPartResId(key).takeIf { it != 0 } ?: getEquipmentResId(key)
                 val label = if (resId != 0) stringResource(resId) else key
-                DropdownMenuItem(text = { Text(label) }, onClick = { onSelect(key); expanded = false })
+                DropdownMenuItem(
+                    text = { Text(label) },
+                    onClick = { onSelect(key); expanded = false }
+                )
             }
         }
     }
 }
 
-// 辅助函数：根据 Key 查找资源 ID
+fun getCategoryResId(key: String): Int = when(key) {
+    "STRENGTH" -> R.string.category_strength
+    "CARDIO" -> R.string.category_cardio
+    "CORE" -> R.string.category_core
+    else -> R.string.category_strength
+}
+
 fun getBodyPartResId(key: String): Int = when(key) {
     "part_chest" -> R.string.part_chest
     "part_back" -> R.string.part_back
@@ -216,7 +409,6 @@ fun getEquipmentResId(key: String): Int = when(key) {
     "equip_cable" -> R.string.equip_cable
     "equip_bodyweight" -> R.string.equip_bodyweight
     "equip_cardio_machine" -> R.string.equip_cardio_machine
-    // 新增映射
     "equip_kettlebell" -> R.string.equip_kettlebell
     "equip_smith_machine" -> R.string.equip_smith_machine
     "equip_resistance_band" -> R.string.equip_resistance_band

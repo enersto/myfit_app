@@ -33,13 +33,13 @@
     <string name="schedule_type_title">Schedule Types</string>
     <string name="about">About</string>
 
-    <string name="week_1">Mon-</string>
-    <string name="week_2">Tue-</string>
-    <string name="week_3">Wed-</string>
-    <string name="week_4">Thu-</string>
-    <string name="week_5">Fri-</string>
-    <string name="week_6">Sat-</string>
-    <string name="week_7">Sun-</string>
+    <string name="week_1">Mon. </string>
+    <string name="week_2">Tue. </string>
+    <string name="week_3">Wed. </string>
+    <string name="week_4">Thu. </string>
+    <string name="week_5">Fri. </string>
+    <string name="week_6">Sat. </string>
+    <string name="week_7">Sun. </string>
 
     <string name="type_core">Core Day</string>
     <string name="type_active">Active Rest</string>
@@ -124,4 +124,14 @@
 
     <string name="header_core_train">Core Training</string>
     <string name="chart_title_core_single">Total Reps Trend</string>
+
+    <string name="msg_import_base">Imported %1$d routine items</string>
+    <string name="msg_import_new_added">, auto-added %1$d new exercises</string>
+    <string name="msg_import_cleaned">, cleaned %1$d duplicates</string>
+    <string name="msg_import_error">Import failed: %1$s</string>
+
+    <string name="val_default_body_part">part_other</string>
+    <string name="val_default_equipment">equip_other</string>
+
+    <string name="import_csv_template">Day, Name, Category, Target, BodyPartKey, EquipmentKey\n1, Bench Press, STRENGTH, 4x8, part_chest, equip_barbell\n1, Pec Deck, STRENGTH, 4x12, part_chest, equip_machine\n2, Running, CARDIO, 30min, part_cardio, equip_cardio_machine\n3, Plank, CORE, 3x60s, part_abs, equip_bodyweight</string>
 </resources>

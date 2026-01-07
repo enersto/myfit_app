@@ -2,7 +2,6 @@ package com.example.myfit.ui
 
 import android.app.Activity
 import android.content.Context
-import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -38,7 +37,6 @@ fun ScheduleScreen(navController: NavController, viewModel: MainViewModel) {
     val currentTheme by viewModel.currentTheme.collectAsState()
     val currentLanguage by viewModel.currentLanguage.collectAsState()
 
-    // 🔴 修复点：只声明一次 context
     val context = LocalContext.current
 
     val dao = remember { AppDatabase.getDatabase(context).workoutDao() }
@@ -47,7 +45,7 @@ fun ScheduleScreen(navController: NavController, viewModel: MainViewModel) {
     var showImportDialog by remember { mutableStateOf(false) }
     var showManualRoutineDialog by remember { mutableStateOf(false) }
 
-    // 定义文件选择器 (备份与恢复)
+    // File pickers for backup/restore
     val createBackupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/x-sqlite3")) { uri ->
         uri?.let { viewModel.backupDatabase(it, context) }
     }
@@ -63,12 +61,12 @@ fun ScheduleScreen(navController: NavController, viewModel: MainViewModel) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 1. 高级功能标题
+        // 1. Advanced Features Title
         item {
             Text(stringResource(R.string.settings_advanced), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onBackground)
         }
 
-        // 2. 语言设置
+        // 2. Language Settings
         item {
             Text(stringResource(R.string.settings_language), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
             Spacer(modifier = Modifier.height(8.dp))
@@ -81,13 +79,12 @@ fun ScheduleScreen(navController: NavController, viewModel: MainViewModel) {
             }
         }
 
-        // 3. 数据管理 (导入/导出/备份/恢复)
+        // 3. Data Management
         item {
-            // 🔴 修复：使用 stringResource
             Text(stringResource(R.string.settings_data_management), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
             Spacer(modifier = Modifier.height(8.dp))
 
-            // CSV 操作
+            // CSV Operations
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = { viewModel.exportHistoryToCsv(context) },
@@ -97,7 +94,6 @@ fun ScheduleScreen(navController: NavController, viewModel: MainViewModel) {
                 ) {
                     Icon(Icons.Default.Share, null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.width(4.dp))
-                    // 🔴 修复
                     Text(stringResource(R.string.export_csv_btn), color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
                 }
                 Button(
@@ -108,31 +104,28 @@ fun ScheduleScreen(navController: NavController, viewModel: MainViewModel) {
                 ) {
                     Icon(Icons.Default.Upload, null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.width(4.dp))
-                    // 🔴 修复
                     Text(stringResource(R.string.import_csv_btn), color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
                 }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // 数据库操作
+            // Database Operations
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = {
                     createBackupLauncher.launch("myfit_backup_${java.time.LocalDate.now()}.db")
                 }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp)) {
-                    // 🔴 修复
                     Text(stringResource(R.string.btn_backup_db), fontSize = 12.sp)
                 }
                 OutlinedButton(onClick = {
                     restoreBackupLauncher.launch(arrayOf("application/*"))
                 }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp)) {
-                    // 🔴 修复
                     Text(stringResource(R.string.btn_restore_db), fontSize = 12.sp)
                 }
             }
         }
 
-        // 4. 周度方案按钮
+        // 4. Weekly Routine Button
         item {
             Button(
                 onClick = { showManualRoutineDialog = true },
@@ -149,7 +142,7 @@ fun ScheduleScreen(navController: NavController, viewModel: MainViewModel) {
             }
         }
 
-        // 5. 动作库按钮
+        // 5. Exercise Library Button
         item {
             Button(
                 onClick = { navController.navigate("exercise_manager") },
@@ -166,7 +159,7 @@ fun ScheduleScreen(navController: NavController, viewModel: MainViewModel) {
             }
         }
 
-        // 6. 主题切换
+        // 6. Theme Switcher
         item {
             Text(stringResource(R.string.theme_style), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
             Spacer(modifier = Modifier.height(12.dp))
@@ -178,37 +171,32 @@ fun ScheduleScreen(navController: NavController, viewModel: MainViewModel) {
             Divider(modifier = Modifier.padding(vertical = 24.dp), color = MaterialTheme.colorScheme.outlineVariant)
         }
 
-        // 7. 周计划类型标题
+        // 7. Schedule Type Title
         item {
             Text(stringResource(R.string.schedule_type_title), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onBackground)
         }
 
-        // 8. 周计划列表
+        // 8. Schedule List
         items(scheduleList) { config ->
             ScheduleItem(config) { newType ->
                 viewModel.updateScheduleConfig(config.dayOfWeek, newType)
             }
         }
 
-        // 9. 底部关于
+        // 9. About Section
         item {
             Spacer(modifier = Modifier.height(24.dp))
             AboutSection()
         }
     }
 
-    // 弹窗逻辑
+    // Dialog Logic
     if (showImportDialog) {
-        val defaultCsv = """
-            Day, Name, Category, Target, BodyPart, Equipment
-            1, 杠铃卧推, STRENGTH, 4x8, part_chest, equip_barbell
-            1, 蝴蝶机夹胸, STRENGTH, 4x12, part_chest, equip_machine
-            2, 跑步, CARDIO, 30min, part_cardio, equip_cardio_machine
-            3, 平板支撑, CORE, 3x60s, part_abs, equip_bodyweight
-        """.trimIndent()
+        val defaultCsv = stringResource(R.string.import_csv_template)
 
         ImportDialog(defaultText = defaultCsv, onDismiss = { showImportDialog = false }) { csv ->
-            viewModel.importWeeklyRoutine(csv)
+            // ✅ 修改处：传入当前的 context
+            viewModel.importWeeklyRoutine(context, csv)
             showImportDialog = false
         }
     }
@@ -218,7 +206,7 @@ fun ScheduleScreen(navController: NavController, viewModel: MainViewModel) {
     }
 }
 
-// ================== 辅助组件 ==================
+// ================== Helper Components ==================
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -286,13 +274,66 @@ fun ManualRoutineDialog(viewModel: MainViewModel, onDismiss: () -> Unit) {
     )
 
     if (showTemplateSelector) {
+        val categories = listOf("STRENGTH", "CARDIO", "CORE")
+        var selectedCategory by remember { mutableStateOf("STRENGTH") }
+
         ModalBottomSheet(onDismissRequest = { showTemplateSelector = false }) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(stringResource(R.string.manage_lib), style = MaterialTheme.typography.headlineSmall)
-                LazyColumn {
-                    items(allTemplates) { template ->
-                        Row(modifier = Modifier.fillMaxWidth().clickable { viewModel.addRoutineItem(selectedDay, template); scope.launch { routineItems.clear(); routineItems.addAll(viewModel.getRoutineForDay(selectedDay)) }; showTemplateSelector = false }.padding(16.dp)) { Text(template.name) }
-                        Divider()
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    stringResource(R.string.manage_lib),
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.padding(16.dp)
+                )
+
+                TabRow(
+                    selectedTabIndex = categories.indexOf(selectedCategory),
+                    containerColor = Color.Transparent,
+                    contentColor = MaterialTheme.colorScheme.primary,
+                    divider = {}
+                ) {
+                    categories.forEach { category ->
+                        val labelRes = when(category) {
+                            "STRENGTH" -> R.string.category_strength
+                            "CARDIO" -> R.string.category_cardio
+                            "CORE" -> R.string.category_core
+                            else -> R.string.category_strength
+                        }
+                        Tab(
+                            selected = selectedCategory == category,
+                            onClick = { selectedCategory = category },
+                            text = { Text(stringResource(labelRes), fontSize = 12.sp) }
+                        )
+                    }
+                }
+
+                LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                    val filtered = allTemplates.filter { it.category == selectedCategory }
+
+                    if (filtered.isEmpty()) {
+                        item {
+                            Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                                Text(stringResource(R.string.chart_no_data), color = Color.Gray)
+                            }
+                        }
+                    } else {
+                        items(filtered) { template ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        viewModel.addRoutineItem(selectedDay, template)
+                                        scope.launch {
+                                            routineItems.clear()
+                                            routineItems.addAll(viewModel.getRoutineForDay(selectedDay))
+                                        }
+                                        showTemplateSelector = false
+                                    }
+                                    .padding(16.dp)
+                            ) {
+                                Text(template.name)
+                            }
+                            Divider(modifier = Modifier.padding(horizontal = 16.dp))
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(40.dp))

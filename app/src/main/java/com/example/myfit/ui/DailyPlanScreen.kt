@@ -229,15 +229,73 @@ fun EmptyState(dayType: DayType, onApplyRoutine: () -> Unit) {
 @Composable
 fun AddExerciseSheet(viewModel: MainViewModel, navController: NavController, onDismiss: () -> Unit) {
     val templates by viewModel.allTemplates.collectAsState(initial = emptyList())
+    // 1. 新增：分类状态
+    val categories = listOf("STRENGTH", "CARDIO", "CORE")
+    var selectedCategory by remember { mutableStateOf("STRENGTH") }
+
     ModalBottomSheet(onDismissRequest = onDismiss) {
-        LazyColumn(modifier = Modifier.padding(16.dp)) {
-            item {
-                Button(onClick = { onDismiss(); navController.navigate("exercise_manager") }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.new_manage_lib)) }
-                Divider(modifier = Modifier.padding(vertical = 8.dp))
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // 2. 新增：顶部管理入口
+            Button(
+                onClick = { onDismiss(); navController.navigate("exercise_manager") },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+            ) {
+                Text(stringResource(R.string.new_manage_lib))
             }
-            items(templates) { t ->
-                Row(modifier = Modifier.fillMaxWidth().clickable { viewModel.addTaskFromTemplate(t); onDismiss() }.padding(12.dp)) { Text(t.name) }
-                Divider()
+
+            Divider(modifier = Modifier.padding(vertical = 8.dp))
+
+            // 3. 新增：分类 Tab
+            TabRow(
+                selectedTabIndex = categories.indexOf(selectedCategory),
+                containerColor = Color.Transparent,
+                contentColor = MaterialTheme.colorScheme.primary,
+                divider = {}
+            ) {
+                categories.forEach { category ->
+                    // 简单的映射 helper (由于不在 ExerciseManagerScreen，这里简单内联处理或使用硬编码Key对应资源)
+                    val labelRes = when(category) {
+                        "STRENGTH" -> R.string.category_strength
+                        "CARDIO" -> R.string.category_cardio
+                        "CORE" -> R.string.category_core
+                        else -> R.string.category_strength
+                    }
+                    Tab(
+                        selected = selectedCategory == category,
+                        onClick = { selectedCategory = category },
+                        text = { Text(stringResource(labelRes), fontSize = 12.sp) }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // 4. 修改：带过滤的列表
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(bottom = 16.dp)
+            ) {
+                val filtered = templates.filter { it.category == selectedCategory }
+
+                if (filtered.isEmpty()) {
+                    item {
+                        Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                            Text(stringResource(R.string.chart_no_data), color = Color.Gray)
+                        }
+                    }
+                } else {
+                    items(filtered) { t ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { viewModel.addTaskFromTemplate(t); onDismiss() }
+                                .padding(16.dp, 12.dp)
+                        ) {
+                            Text(t.name, style = MaterialTheme.typography.bodyLarge)
+                        }
+                        Divider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.surfaceVariant)
+                    }
+                }
             }
         }
     }
