@@ -1,12 +1,11 @@
 package com.example.myfit.ui
 
 import android.app.Activity
-import android.content.Context
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,6 +13,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -30,10 +31,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.myfit.R
-import com.example.myfit.data.AppDatabase
 import com.example.myfit.model.*
 import com.example.myfit.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 
 @Composable
 fun ScheduleScreen(navController: NavController, viewModel: MainViewModel) {
@@ -41,16 +42,12 @@ fun ScheduleScreen(navController: NavController, viewModel: MainViewModel) {
     val currentLanguage by viewModel.currentLanguage.collectAsState()
 
     val context = LocalContext.current
-
-    val dao = remember { AppDatabase.getDatabase(context).workoutDao() }
-    val scheduleList by dao.getAllSchedules().collectAsState(initial = emptyList())
+    val scheduleList by viewModel.allSchedules.collectAsState(initial = emptyList())
 
     var showImportDialog by remember { mutableStateOf(false) }
     var showManualRoutineDialog by remember { mutableStateOf(false) }
-    // V5.4 新增：帮助弹窗状态
     var showHelpDialog by remember { mutableStateOf(false) }
 
-    // File pickers for backup/restore
     val createBackupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/x-sqlite3")) { uri ->
         uri?.let { viewModel.backupDatabase(it, context) }
     }
@@ -66,12 +63,12 @@ fun ScheduleScreen(navController: NavController, viewModel: MainViewModel) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 1. Advanced Features Title
+        // 1. Title
         item {
             Text(stringResource(R.string.settings_advanced), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onBackground)
         }
 
-        // 2. Language Settings
+        // 2. Language
         item {
             Text(stringResource(R.string.settings_language), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
             Spacer(modifier = Modifier.height(8.dp))
@@ -89,7 +86,6 @@ fun ScheduleScreen(navController: NavController, viewModel: MainViewModel) {
             Text(stringResource(R.string.settings_data_management), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
             Spacer(modifier = Modifier.height(8.dp))
 
-            // CSV Operations & Help
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = { viewModel.exportHistoryToCsv(context) },
@@ -115,20 +111,18 @@ fun ScheduleScreen(navController: NavController, viewModel: MainViewModel) {
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // V5.4 新增：帮助按钮
             OutlinedButton(
                 onClick = { showHelpDialog = true },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(8.dp)
             ) {
-                Icon(Icons.Default.HelpOutline, null, modifier = Modifier.size(16.dp))
+                Icon(Icons.AutoMirrored.Filled.HelpOutline, null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(stringResource(R.string.settings_help_reference))
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Database Operations
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = {
                     createBackupLauncher.launch("myfit_backup_${java.time.LocalDate.now()}.db")
@@ -143,7 +137,7 @@ fun ScheduleScreen(navController: NavController, viewModel: MainViewModel) {
             }
         }
 
-        // 4. Weekly Routine Button
+        // 4. Weekly Routine
         item {
             Button(
                 onClick = { showManualRoutineDialog = true },
@@ -160,7 +154,7 @@ fun ScheduleScreen(navController: NavController, viewModel: MainViewModel) {
             }
         }
 
-        // 5. Exercise Library Button
+        // 5. Exercise Library
         item {
             Button(
                 onClick = { navController.navigate("exercise_manager") },
@@ -169,7 +163,7 @@ fun ScheduleScreen(navController: NavController, viewModel: MainViewModel) {
                 shape = RoundedCornerShape(12.dp),
                 contentPadding = PaddingValues(16.dp)
             ) {
-                Icon(Icons.Default.List, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Icon(Icons.AutoMirrored.Filled.List, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(stringResource(R.string.manage_lib), color = MaterialTheme.colorScheme.onSurface)
                 Spacer(modifier = Modifier.weight(1f))
@@ -177,7 +171,7 @@ fun ScheduleScreen(navController: NavController, viewModel: MainViewModel) {
             }
         }
 
-        // 6. Theme Switcher
+        // 6. Theme
         item {
             Text(stringResource(R.string.theme_style), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
             Spacer(modifier = Modifier.height(12.dp))
@@ -186,29 +180,27 @@ fun ScheduleScreen(navController: NavController, viewModel: MainViewModel) {
                     ThemeCircle(theme, currentTheme == theme) { viewModel.switchTheme(theme) }
                 }
             }
-            Divider(modifier = Modifier.padding(vertical = 24.dp), color = MaterialTheme.colorScheme.outlineVariant)
+            HorizontalDivider(modifier = Modifier.padding(vertical = 24.dp), color = MaterialTheme.colorScheme.outlineVariant)
         }
 
-        // 7. Schedule Type Title
+        // 7. Schedule Type
         item {
             Text(stringResource(R.string.schedule_type_title), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onBackground)
         }
 
-        // 8. Schedule List
         items(scheduleList) { config ->
             ScheduleItem(config) { newType ->
                 viewModel.updateScheduleConfig(config.dayOfWeek, newType)
             }
         }
 
-        // 9. About Section
+        // 8. About
         item {
             Spacer(modifier = Modifier.height(24.dp))
             AboutSection()
         }
     }
 
-    // Dialog Logic
     if (showImportDialog) {
         val defaultCsv = stringResource(R.string.import_csv_template)
         ImportDialog(defaultText = defaultCsv, onDismiss = { showImportDialog = false }) { csv ->
@@ -226,14 +218,16 @@ fun ScheduleScreen(navController: NavController, viewModel: MainViewModel) {
     }
 }
 
-// ================== V5.4 Help & Reference Dialog ==================
+// ================== Helper Components ==================
+
+// [重要修复] 删除了 getBodyPartResId 和 getEquipmentResId 的定义
+// 它们已经在 ExerciseManagerScreen.kt 中作为 public 函数定义过了，直接调用即可
 
 @Composable
-fun KeyReferenceDialog(onDismiss: () -> Unit) {
+private fun KeyReferenceDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
 
-    // 复用 ExerciseManagerScreen 中的数据定义 (或者在此重新定义以解耦)
     val bodyPartKeys = listOf(
         "part_chest", "part_back", "part_legs", "part_shoulders",
         "part_arms", "part_abs", "part_cardio", "part_other"
@@ -245,11 +239,8 @@ fun KeyReferenceDialog(onDismiss: () -> Unit) {
         "equip_trx", "equip_bench", "equip_other"
     )
 
-    // 简单的 Helper 函数来获取资源 ID (如果不想公开 ExerciseManagerScreen 的函数)
     fun getResId(key: String, isBodyPart: Boolean): Int {
-        // 这里为了简单，如果 ExerciseManagerScreen.kt 中的函数是 public 的，可以直接调用
-        // 如果是 private 或者想解耦，可以使用同样的 when 结构
-        // 假设 ExerciseManagerScreen.kt 中的函数是 top-level public 的:
+        // 直接调用同包下 ExerciseManagerScreen.kt 中的公共函数
         return if (isBodyPart) getBodyPartResId(key) else getEquipmentResId(key)
     }
 
@@ -260,10 +251,9 @@ fun KeyReferenceDialog(onDismiss: () -> Unit) {
             Column(modifier = Modifier.heightIn(max = 400.dp)) {
                 Text(stringResource(R.string.help_dialog_subtitle), fontSize = 12.sp, color = Color.Gray)
                 Spacer(modifier = Modifier.height(8.dp))
-                Divider()
+                HorizontalDivider()
 
                 LazyColumn(modifier = Modifier.weight(1f)) {
-                    // Body Parts Section
                     item {
                         Text(
                             stringResource(R.string.section_body_part),
@@ -273,7 +263,7 @@ fun KeyReferenceDialog(onDismiss: () -> Unit) {
                         )
                     }
                     items(bodyPartKeys) { key ->
-                        ReferenceRow(
+                        ScheduleReferenceRow(
                             label = stringResource(getResId(key, true)),
                             key = key,
                             onCopy = {
@@ -283,7 +273,6 @@ fun KeyReferenceDialog(onDismiss: () -> Unit) {
                         )
                     }
 
-                    // Equipment Section
                     item {
                         Text(
                             stringResource(R.string.section_equipment),
@@ -293,7 +282,7 @@ fun KeyReferenceDialog(onDismiss: () -> Unit) {
                         )
                     }
                     items(equipKeys) { key ->
-                        ReferenceRow(
+                        ScheduleReferenceRow(
                             label = stringResource(getResId(key, false)),
                             key = key,
                             onCopy = {
@@ -312,7 +301,7 @@ fun KeyReferenceDialog(onDismiss: () -> Unit) {
 }
 
 @Composable
-fun ReferenceRow(label: String, key: String, onCopy: () -> Unit) {
+private fun ScheduleReferenceRow(label: String, key: String, onCopy: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -335,8 +324,6 @@ fun ReferenceRow(label: String, key: String, onCopy: () -> Unit) {
         }
     }
 }
-
-// ================== Existing Helper Components ==================
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -390,7 +377,7 @@ fun ManualRoutineDialog(viewModel: MainViewModel, onDismiss: () -> Unit) {
                                         Icon(Icons.Default.Delete, null, tint = Color.Red.copy(alpha = 0.5f))
                                     }
                                 }
-                                Divider()
+                                HorizontalDivider()
                             }
                         }
                     }
@@ -462,7 +449,7 @@ fun ManualRoutineDialog(viewModel: MainViewModel, onDismiss: () -> Unit) {
                             ) {
                                 Text(template.name)
                             }
-                            Divider(modifier = Modifier.padding(horizontal = 16.dp))
+                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                         }
                     }
                 }
@@ -518,14 +505,13 @@ fun ScheduleItem(config: ScheduleConfig, onTypeChange: (DayType) -> Unit) {
 fun ThemeCircle(theme: AppTheme, isSelected: Boolean, onClick: () -> Unit) {
     val borderColor = if (isSelected) MaterialTheme.colorScheme.onBackground else Color.Transparent
 
-    Box(
-        modifier = Modifier
-            .size(48.dp)
-            .clip(CircleShape)
-            .background(Color(theme.primary))
-            .border(width = 3.dp, color = borderColor, shape = CircleShape)
-            .clickable(onClick = onClick)
-    )
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.size(48.dp),
+        shape = CircleShape,
+        color = Color(theme.primary),
+        border = BorderStroke(3.dp, borderColor)
+    ) {}
 }
 
 @Composable

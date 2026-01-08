@@ -2,11 +2,11 @@ package com.example.myfit.viewmodel
 
 import android.app.Application
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.sqlite.db.SimpleSQLiteQuery
 import com.example.myfit.R
 import com.example.myfit.data.AppDatabase
 import com.example.myfit.data.WorkoutDao
@@ -15,6 +15,7 @@ import com.example.myfit.ui.ChartDataPoint
 import com.example.myfit.ui.ChartGranularity
 import com.example.myfit.util.NotificationHelper
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -23,43 +24,46 @@ import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val dao: WorkoutDao = AppDatabase.getDatabase(application).workoutDao()
+    private val database = AppDatabase.getDatabase(application)
+    private val dao: WorkoutDao = database.workoutDao()
 
     private val _selectedDate = MutableStateFlow(LocalDate.now())
     val selectedDate: StateFlow<LocalDate> = _selectedDate.asStateFlow()
 
-    // --- 主题与语言设置 (修复：多语言下主题切换失效问题) ---
-    // 逻辑：监听数据库设置 -> 转换为 AppTheme 对象
+    // --- Theme & Language ---
     val currentTheme = dao.getAppSettings()
         .map { it?.themeId ?: 0 }
-        .map { AppTheme.fromId(it) } // 依赖 AppTheme.fromId 的正确实现
-        .stateIn(viewModelScope, SharingStarted.Lazily, AppTheme.DARK) // 默认使用 DARK
+        .map { AppTheme.fromId(it) }
+        .stateIn(viewModelScope, SharingStarted.Lazily, AppTheme.DARK)
 
     val currentLanguage = dao.getAppSettings()
         .map { it?.languageCode ?: "zh" }
         .stateIn(viewModelScope, SharingStarted.Lazily, "zh")
 
-    // --- 日程类型 ---
-    private val _todayScheduleType = MutableStateFlow(DayType.CORE) // 默认值
-    val todayScheduleType = combine(_selectedDate, dao.getAllSchedules()) { date, schedules ->
+    // --- Schedule ---
+    val allSchedules: Flow<List<ScheduleConfig>> = dao.getAllSchedules()
+
+    private val _todayScheduleType = MutableStateFlow(DayType.CORE)
+    val todayScheduleType = combine(_selectedDate, allSchedules) { date, schedules ->
         val dayOfWeek = date.dayOfWeek.value
         val type = schedules.find { it.dayOfWeek == dayOfWeek }?.dayType ?: DayType.CORE
         _todayScheduleType.value = type
         type
     }.stateIn(viewModelScope, SharingStarted.Lazily, DayType.CORE)
 
-    // --- 体重提醒 ---
-    private val _showWeightAlert = MutableStateFlow(false)
+    // --- Weight Alert ---
     val showWeightAlert = dao.getLatestWeight().map { record ->
-        val shouldShow = if (record == null) true else ChronoUnit.DAYS.between(LocalDate.parse(record.date), LocalDate.now()) > 7
-        _showWeightAlert.value = shouldShow
-        shouldShow
+        if (record == null) true else ChronoUnit.DAYS.between(LocalDate.parse(record.date), LocalDate.now()) > 7
     }.stateIn(viewModelScope, SharingStarted.Lazily, false)
 
-    // --- 数据流 ---
+    // --- Data Flows ---
     val todayTasks: Flow<List<WorkoutTask>> = _selectedDate.flatMapLatest { date ->
         dao.getTasksForDate(date.toString())
     }
@@ -68,7 +72,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val historyRecords: Flow<List<WorkoutTask>> = dao.getAllHistoryTasks()
     val weightHistory: Flow<List<WeightRecord>> = dao.getAllWeightRecords()
 
-    // --- 计时器状态 ---
+    // --- Timer State ---
     data class TimerState(
         val taskId: Long = -1L,
         val setIndex: Int = -1,
@@ -86,7 +90,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         NotificationHelper.createNotificationChannel(application)
     }
 
-    // --- 计时器逻辑 ---
+    // --- Timer Logic ---
     fun startTimer(context: Context, taskId: Long, setIndex: Int, durationMinutes: Int) {
         val current = _timerState.value
         val initialSeconds = if (current.taskId == taskId && current.setIndex == setIndex && current.isPaused) {
@@ -101,22 +105,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         timerJob?.cancel()
         timerJob = viewModelScope.launch(Dispatchers.Default) {
             val task = dao.getTaskById(taskId)
-            // 修复：从资源获取字符串，支持多语言占位符
-            val titleTemplate = getApplication<Application>().getString(R.string.notify_training_title)
             val taskName = task?.name ?: "Training"
-            val notificationTitle = String.format(titleTemplate, taskName)
+
+            val endTimeMillis = System.currentTimeMillis() + (initialSeconds * 1000)
+
+            withContext(Dispatchers.Main) {
+                NotificationHelper.updateTimerNotification(context, taskName, endTimeMillis)
+            }
 
             while (_timerState.value.remainingSeconds > 0 && _timerState.value.isRunning) {
-                delay(1000)
-                _timerState.update { it.copy(remainingSeconds = it.remainingSeconds - 1) }
                 try {
-                    val s = _timerState.value.remainingSeconds
-                    val timeStr = String.format("%02d:%02d", s / 60, s % 60)
                     withContext(Dispatchers.Main) {
-                        NotificationHelper.updateTimerNotification(context, notificationTitle, timeStr)
+                        NotificationHelper.updateTimerNotification(context, taskName, endTimeMillis)
                     }
                 } catch (e: Exception) { e.printStackTrace() }
+
+                delay(1000)
+                _timerState.update { it.copy(remainingSeconds = it.remainingSeconds - 1) }
             }
+
             if (_timerState.value.remainingSeconds <= 0 && _timerState.value.isRunning) {
                 withContext(Dispatchers.Main) {
                     try { NotificationHelper.cancelNotification(context) } catch (e: Exception) { e.printStackTrace() }
@@ -129,11 +136,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun pauseTimer(context: Context) {
         _timerState.update { it.copy(isRunning = false, isPaused = true) }
         timerJob?.cancel()
-        try {
-            val pausedTitle = getApplication<Application>().getString(R.string.notify_paused_title)
-            val resumeText = getApplication<Application>().getString(R.string.notify_click_resume)
-            NotificationHelper.updateTimerNotification(context, pausedTitle, resumeText)
-        } catch (e: Exception) { e.printStackTrace() }
+        try { NotificationHelper.updateTimerNotification(context, null, null) } catch (e: Exception) { e.printStackTrace() }
     }
 
     fun stopTimer(context: Context) {
@@ -171,13 +174,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // --- 核心业务逻辑 ---
+    // --- Core Logic ---
 
     fun deleteTemplate(id: Long) = viewModelScope.launch {
         val t = dao.getTemplateById(id)
-        if (t != null) {
-            dao.deleteTemplate(t)
-        }
+        if (t != null) dao.deleteTemplate(t)
     }
 
     fun saveTemplate(t: ExerciseTemplate) = viewModelScope.launch {
@@ -220,10 +221,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun logWeight(w: Float) = viewModelScope.launch {
         dao.insertWeight(WeightRecord(date = LocalDate.now().toString(), weight = w))
-        _showWeightAlert.value = false
     }
-
-    // --- 日程与计划支持 ---
 
     fun addRoutineItem(day: Int, template: ExerciseTemplate) = viewModelScope.launch {
         dao.insertRoutineItem(WeeklyRoutineItem(
@@ -243,16 +241,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateScheduleConfig(day: Int, type: DayType) = viewModelScope.launch {
         dao.insertSchedule(ScheduleConfig(dayOfWeek = day, dayType = type))
-        if (day == _selectedDate.value.dayOfWeek.value) {
-            _todayScheduleType.value = type
+        if (day == _selectedDate.value.dayOfWeek.value) _todayScheduleType.value = type
+    }
+
+    suspend fun getRoutineForDay(day: Int): List<WeeklyRoutineItem> = dao.getRoutineForDay(day)
+
+    fun backupDatabase(uri: Uri, context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                if (database.isOpen) database.openHelper.writableDatabase.query("PRAGMA wal_checkpoint(FULL)").close()
+                val dbName = "myfit_v7.db"
+                val dbPath = context.getDatabasePath(dbName)
+                if (dbPath.exists()) {
+                    context.contentResolver.openOutputStream(uri)?.use { output -> FileInputStream(dbPath).use { input -> input.copyTo(output) } }
+                    withContext(Dispatchers.Main) { Toast.makeText(context, context.getString(R.string.msg_backup_success), Toast.LENGTH_SHORT).show() }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { Toast.makeText(context, context.getString(R.string.msg_backup_failed, e.message), Toast.LENGTH_LONG).show() }
+            }
         }
     }
 
-    suspend fun getRoutineForDay(day: Int): List<WeeklyRoutineItem> {
-        return dao.getRoutineForDay(day)
+    fun restoreDatabase(uri: Uri, context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val dbName = "myfit_v7.db"
+                val dbPath = context.getDatabasePath(dbName)
+                if (database.isOpen) database.close()
+                context.contentResolver.openInputStream(uri)?.use { input -> FileOutputStream(dbPath).use { output -> input.copyTo(output) } }
+                val wal = File(dbPath.path + "-wal"); if (wal.exists()) wal.delete()
+                val shm = File(dbPath.path + "-shm"); if (shm.exists()) shm.delete()
+                withContext(Dispatchers.Main) { Toast.makeText(context, context.getString(R.string.msg_restore_success), Toast.LENGTH_LONG).show() }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { Toast.makeText(context, context.getString(R.string.msg_restore_failed, e.message), Toast.LENGTH_LONG).show() }
+            }
+        }
     }
-
-    // --- 图表数据辅助方法 ---
 
     fun getWeightChartData(granularity: ChartGranularity): Flow<List<ChartDataPoint>> {
         return weightHistory.map { records ->
@@ -272,12 +296,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val cardio = tasks.filter { it.category == "CARDIO" }
             val raw = cardio.groupBy { LocalDate.parse(it.date) }.map { (date, tList) ->
                 val sum = tList.sumOf { t ->
-                    // 优先使用 sets 中的数据，如果 sets 为空则解析 target
-                    if (t.sets.isNotEmpty()) {
-                        t.sets.sumOf { s -> parseDuration(s.weightOrDuration).toDouble() }
-                    } else {
-                        parseDuration(t.target).toDouble()
-                    }
+                    if (t.sets.isNotEmpty()) t.sets.sumOf { s -> parseDuration(s.weightOrDuration).toDouble() }
+                    else parseDuration(t.target).toDouble()
                 }.toFloat()
                 Pair(date, sum)
             }
@@ -301,10 +321,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return historyRecords.map { tasks ->
             val targetTasks = tasks.filter { it.name == name }
             val raw = targetTasks.groupBy { LocalDate.parse(it.date) }.map { (date, tList) ->
-                val values = tList.flatMap { t ->
-                    if (t.sets.isNotEmpty()) t.sets else listOf(WorkoutSet(1, t.actualWeight.ifEmpty { t.target }, t.target))
-                }
-                // Mode 0: Duration, 1: Max Weight, 2: Total Reps
+                val values = tList.flatMap { t -> if (t.sets.isNotEmpty()) t.sets else listOf(WorkoutSet(1, t.actualWeight.ifEmpty { t.target }, t.target)) }
                 val dailyVal = when(mode) {
                     0 -> values.sumOf { parseDuration(it.weightOrDuration).toDouble() }.toFloat()
                     1 -> values.maxOfOrNull { parseValue(it.weightOrDuration) } ?: 0f
@@ -318,7 +335,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 ChartGranularity.MONTHLY -> raw.groupBy { it.first.withDayOfMonth(1) }
             }
             grouped.map { (date, list) ->
-                // Average for weight, Sum for duration/reps
                 val finalVal = if (mode == 1) list.map { it.second }.average().toFloat() else list.sumOf { it.second.toDouble() }.toFloat()
                 ChartDataPoint(date, finalVal, date.format(DateTimeFormatter.ofPattern("MM/dd")))
             }.sortedBy { it.date }
@@ -340,26 +356,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // --- 杂项与备份 ---
     fun switchTheme(theme: AppTheme) = viewModelScope.launch {
-        // 修复：保留当前语言设置
         val currentLang = currentLanguage.value
         dao.saveAppSettings(AppSetting(0, theme.id, currentLang))
     }
-
     fun switchLanguage(lang: String) = viewModelScope.launch {
-        // 修复：保留当前主题设置
         val currentThemeId = currentTheme.value.id
         dao.saveAppSettings(AppSetting(0, currentThemeId, lang))
     }
-
-    fun exportHistoryToCsv(context: Context) {
-        // ... (省略具体实现，保持原样或按需添加)
-    }
-    fun importWeeklyRoutine(context: Context, csv: String) {
-        // ... (省略具体实现，保持原样或按需添加)
-    }
-    fun backupDatabase(uri: Uri, context: Context) {}
-    fun restoreDatabase(uri: Uri, context: Context) {}
+    fun exportHistoryToCsv(context: Context) {}
+    fun importWeeklyRoutine(context: Context, csv: String) {}
     suspend fun optimizeExerciseLibrary(): Int = 0
 }

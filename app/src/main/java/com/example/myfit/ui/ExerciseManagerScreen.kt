@@ -11,6 +11,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -39,8 +40,9 @@ val EQUIPMENT_OPTIONS = listOf(
     "equip_trx", "equip_bench", "equip_other"
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ExerciseManagerScreen(navController: NavController, viewModel: MainViewModel) {
+fun ExerciseManagerScreen(viewModel: MainViewModel, navController: NavController) {
     val templates by viewModel.allTemplates.collectAsState(initial = emptyList())
     var showDialog by remember { mutableStateOf(false) }
     var editingTemplate by remember { mutableStateOf<ExerciseTemplate?>(null) }
@@ -59,7 +61,8 @@ fun ExerciseManagerScreen(navController: NavController, viewModel: MainViewModel
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        // [Fix] Use AutoMirrored icon
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
@@ -205,7 +208,8 @@ fun ExpandableBodyPartSection(
 
             AnimatedVisibility(visible = expanded) {
                 Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
-                    Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    // [Fix] Divider -> HorizontalDivider
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     Spacer(modifier = Modifier.height(8.dp))
 
                     equipmentMap.forEach { (equipKey, templates) ->
@@ -361,16 +365,24 @@ fun ResourceDropdown(currentKey: String, options: List<String>, onSelect: (Strin
     val currentResId = getBodyPartResId(currentKey).takeIf { it != 0 } ?: getEquipmentResId(currentKey)
     val displayText = if (currentResId != 0) stringResource(currentResId) else currentKey
 
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
+    // [Fix] Correct usage of ExposedDropdownMenuBox to avoid 'menuAnchor' errors
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded }
+    ) {
         OutlinedTextField(
             value = displayText,
             onValueChange = {},
             readOnly = true,
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            // [Fix] Correct anchor modifier usage
             modifier = Modifier.menuAnchor().fillMaxWidth(),
             textStyle = MaterialTheme.typography.bodySmall
         )
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
             options.forEach { key ->
                 val resId = getBodyPartResId(key).takeIf { it != 0 } ?: getEquipmentResId(key)
                 val label = if (resId != 0) stringResource(resId) else key
@@ -382,6 +394,8 @@ fun ResourceDropdown(currentKey: String, options: List<String>, onSelect: (Strin
         }
     }
 }
+
+// Helper functions (Added to ensure they are available)
 
 fun getCategoryResId(key: String): Int = when(key) {
     "STRENGTH" -> R.string.category_strength
