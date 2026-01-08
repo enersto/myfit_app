@@ -296,22 +296,36 @@ private fun parseDefaultDuration(target: String): String {
 
 @Composable
 fun SetRow(index: Int, set: WorkoutSet, color: Color, onUpdate: (WorkoutSet) -> Unit) {
+    // [修复] 引入本地状态，解决输入时光标跳动问题
+    // 使用 derivedStateOf 或 LaunchedEffect 确保当外部 set 真的改变时（非输入导致的回环），本地状态能跟上
+    var weightInput by remember(set.weightOrDuration) { mutableStateOf(set.weightOrDuration) }
+    var repsInput by remember(set.reps) { mutableStateOf(set.reps) }
+
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text("${set.setNumber}", modifier = Modifier.weight(0.5f), fontWeight = FontWeight.Bold, color = Color.Gray)
+
         Surface(modifier = Modifier.weight(1f).padding(end = 8.dp), color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(4.dp)) {
             BasicTextField(
-                value = set.weightOrDuration,
-                onValueChange = { onUpdate(set.copy(weightOrDuration = it)) },
+                value = weightInput,
+                onValueChange = {
+                    weightInput = it
+                    // 实时更新 ViewModel，但因为本地使用了 state，UI 不会因为重组而重置光标
+                    onUpdate(set.copy(weightOrDuration = it))
+                },
                 textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp),
                 singleLine = true,
                 cursorBrush = SolidColor(color),
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
             )
         }
+
         Surface(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(4.dp)) {
             BasicTextField(
-                value = set.reps,
-                onValueChange = { onUpdate(set.copy(reps = it)) },
+                value = repsInput,
+                onValueChange = {
+                    repsInput = it
+                    onUpdate(set.copy(reps = it))
+                },
                 textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp),
                 singleLine = true,
                 cursorBrush = SolidColor(color),

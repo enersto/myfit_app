@@ -29,6 +29,7 @@ import java.time.temporal.ChronoUnit
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import kotlin.system.exitProcess
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -39,14 +40,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _selectedDate = MutableStateFlow(LocalDate.now())
     val selectedDate: StateFlow<LocalDate> = _selectedDate.asStateFlow()
 
-    // --- User Profile (基础信息) ---
-    // [修复] 即使数据库为空，也提供一个默认对象，防止空指针
+    // --- User Profile ---
     val userProfile = dao.getAppSettings()
         .map { it ?: AppSetting(themeId = 1) }
         .stateIn(viewModelScope, SharingStarted.Lazily, AppSetting(themeId = 1))
 
     // --- Theme & Language ---
-    // [优化] 直接观察 userProfile 流，减少重复查询
     val currentTheme = userProfile
         .map { AppTheme.fromId(it.themeId) }
         .stateIn(viewModelScope, SharingStarted.Lazily, AppTheme.GREEN)
@@ -96,6 +95,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val setIndex: Int = -1,
         val totalSeconds: Int = 0,
         val remainingSeconds: Int = 0,
+        val endTimeMillis: Long = 0L,
         val isRunning: Boolean = false,
         val isPaused: Boolean = false
     )
@@ -111,20 +111,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // --- Timer Logic ---
     fun startTimer(context: Context, taskId: Long, setIndex: Int, durationMinutes: Int) {
         val current = _timerState.value
-        val initialSeconds = if (current.taskId == taskId && current.setIndex == setIndex && current.isPaused) {
-            current.remainingSeconds
+        val now = System.currentTimeMillis()
+        val durationMillis = durationMinutes * 60 * 1000L
+
+        val endTimeMillis = if (current.taskId == taskId && current.setIndex == setIndex && current.isPaused) {
+            now + (current.remainingSeconds * 1000L)
         } else {
             if (durationMinutes <= 0) return
-            durationMinutes * 60
+            now + durationMillis
         }
 
-        _timerState.value = TimerState(taskId, setIndex, durationMinutes * 60, initialSeconds, true, false)
-        val endTimeMillis = System.currentTimeMillis() + (initialSeconds * 1000)
+        val initialRemSeconds = ((endTimeMillis - now) / 1000).toInt()
+        _timerState.value = TimerState(taskId, setIndex, durationMinutes * 60, initialRemSeconds, endTimeMillis, true, false)
 
         viewModelScope.launch(Dispatchers.IO) {
             val task = dao.getTaskById(taskId)
             val taskName = task?.name ?: "Training"
-
             val intent = Intent(context, TimerService::class.java).apply {
                 action = TimerService.ACTION_START_TIMER
                 putExtra(TimerService.EXTRA_TASK_NAME, taskName)
@@ -142,22 +144,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val task = dao.getTaskById(taskId)
             val taskName = task?.name ?: "Training"
 
-            while (_timerState.value.remainingSeconds > 0 && _timerState.value.isRunning) {
-                try {
+            while (_timerState.value.isRunning) {
+                val currentNow = System.currentTimeMillis()
+                val targetEnd = _timerState.value.endTimeMillis
+                val remSeconds = ((targetEnd - currentNow) / 1000).toInt()
+
+                if (remSeconds <= 0) {
+                    _timerState.update { it.copy(remainingSeconds = 0) }
                     withContext(Dispatchers.Main) {
-                        NotificationHelper.updateTimerNotification(context, taskName, endTimeMillis)
+                        stopService(context)
+                        onTimerFinished(taskId, setIndex, durationMinutes)
                     }
-                } catch (e: Exception) { e.printStackTrace() }
-
-                delay(1000)
-                _timerState.update { it.copy(remainingSeconds = it.remainingSeconds - 1) }
-            }
-
-            if (_timerState.value.remainingSeconds <= 0 && _timerState.value.isRunning) {
-                withContext(Dispatchers.Main) {
-                    stopService(context)
-                    onTimerFinished(taskId, setIndex, durationMinutes)
+                    break
+                } else {
+                    _timerState.update { it.copy(remainingSeconds = remSeconds) }
+                    try {
+                        withContext(Dispatchers.Main) {
+                            NotificationHelper.updateTimerNotification(context, taskName, targetEnd)
+                        }
+                    } catch (e: Exception) { e.printStackTrace() }
                 }
+                delay(500)
             }
         }
     }
@@ -215,7 +222,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // --- Chart Data Logic (BMI/BMR) ---
+    // --- Chart Data Logic ---
     private fun calculateBMI(weight: Float, heightCm: Float): Float {
         if (heightCm <= 0) return 0f
         val heightM = heightCm / 100f
@@ -262,21 +269,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }.sortedBy { it.date }
     }
 
-    // --- Core Logic & Actions ---
+    // --- Actions ---
 
-    // 🔴 [关键修复]：切换主题时，保留现有语言和身体数据
     fun switchTheme(theme: AppTheme) = viewModelScope.launch {
-        val currentSettings = userProfile.value // 获取当前完整配置 (包含 age, height 等)
-        dao.saveAppSettings(currentSettings.copy(themeId = theme.id)) // 仅修改 themeId
+        val currentSettings = userProfile.value
+        dao.saveAppSettings(currentSettings.copy(themeId = theme.id))
     }
 
-    // 🔴 [关键修复]：切换语言时，保留现有主题和身体数据
     fun switchLanguage(lang: String) = viewModelScope.launch {
-        val currentSettings = userProfile.value // 获取当前完整配置
-        dao.saveAppSettings(currentSettings.copy(languageCode = lang)) // 仅修改 languageCode
+        val currentSettings = userProfile.value
+        dao.saveAppSettings(currentSettings.copy(languageCode = lang))
     }
 
-    // 更新体重和身体信息 (打卡页用)
     fun logWeightAndProfile(weight: Float, age: Int?, height: Float?, gender: Int?) = viewModelScope.launch {
         dao.insertWeight(WeightRecord(date = LocalDate.now().toString(), weight = weight))
 
@@ -289,7 +293,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         dao.saveAppSettings(newSettings)
     }
 
-    // 更新身体信息 (设置页用)
     fun updateProfile(age: Int, height: Float, gender: Int) = viewModelScope.launch {
         val currentSettings = userProfile.value
         dao.saveAppSettings(currentSettings.copy(age = age, height = height, gender = gender))
@@ -361,36 +364,146 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     suspend fun getRoutineForDay(day: Int): List<WeeklyRoutineItem> = dao.getRoutineForDay(day)
 
-    fun backupDatabase(uri: Uri, context: Context) {
+    fun exportHistoryToCsv(uri: Uri, context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                if (database.isOpen) database.openHelper.writableDatabase.query("PRAGMA wal_checkpoint(FULL)").close()
-                val dbName = "myfit_v7.db"
-                val dbPath = context.getDatabasePath(dbName)
-                if (dbPath.exists()) {
-                    context.contentResolver.openOutputStream(uri)?.use { output -> FileInputStream(dbPath).use { input -> input.copyTo(output) } }
-                    withContext(Dispatchers.Main) { Toast.makeText(context, context.getString(R.string.msg_backup_success), Toast.LENGTH_SHORT).show() }
+                val tasks = dao.getHistoryRecordsSync()
+                val sb = StringBuilder()
+                sb.append("Date,Name,Category,Target,ActualWeight,Sets\n")
+
+                tasks.forEach { t ->
+                    val safeName = t.name.replace(",", " ")
+                    val setsStr = t.sets.joinToString(" | ") { "${it.weightOrDuration} x ${it.reps}" }
+                    sb.append("${t.date},$safeName,${t.category},${t.target},${t.actualWeight},$setsStr\n")
+                }
+
+                context.contentResolver.openOutputStream(uri)?.use { output ->
+                    output.write(sb.toString().toByteArray())
+                }
+
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, context.getString(R.string.msg_backup_success), Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
-                withContext(Dispatchers.Main) { Toast.makeText(context, context.getString(R.string.msg_backup_failed, e.message), Toast.LENGTH_LONG).show() }
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
 
+    fun backupDatabase(uri: Uri, context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // 1. 强制 WAL checkpoint
+                if (database.isOpen) {
+                    val db = database.openHelper.writableDatabase
+                    db.query("PRAGMA wal_checkpoint(TRUNCATE)").use { it.moveToFirst() }
+                    // ✅ 确保 checkpoint 完成
+                    db.query("PRAGMA wal_checkpoint(FULL)").use { it.moveToFirst() }
+                }
+
+                // ✅ 2. 增加等待时间
+                delay(1000)
+
+                val dbName = "myfit_v7.db"
+                val dbPath = context.getDatabasePath(dbName)
+
+                if (dbPath.exists()) {
+                    context.contentResolver.openOutputStream(uri)?.use { output ->
+                        FileInputStream(dbPath).use { input ->
+                            input.copyTo(output)
+                            // ✅ 强制刷新输出流
+                            output.flush()
+                        }
+                    }
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.msg_backup_success),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                } else {
+                    throw Exception("Database file not found")
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.msg_backup_failed, e.message),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+        }
+    }
+
+    // 🔴 [核心修复] 彻底解决恢复数据不全的问题
     fun restoreDatabase(uri: Uri, context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val dbName = "myfit_v7.db"
                 val dbPath = context.getDatabasePath(dbName)
+
+                // 1. 关闭数据库连接
                 if (database.isOpen) database.close()
-                context.contentResolver.openInputStream(uri)?.use { input -> FileOutputStream(dbPath).use { output -> input.copyTo(output) } }
-                val wal = File(dbPath.path + "-wal"); if (wal.exists()) wal.delete()
-                val shm = File(dbPath.path + "-shm"); if (shm.exists()) shm.delete()
-                withContext(Dispatchers.Main) { Toast.makeText(context, context.getString(R.string.msg_restore_success), Toast.LENGTH_LONG).show() }
+
+                // 2. 覆盖主数据库文件
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(dbPath).use { output ->
+                        input.copyTo(output)
+                        // ✅ 强制刷新到磁盘
+                        output.fd.sync()
+                    }
+                }
+
+                // 3. 删除旧的 WAL/SHM 文件
+                val walFile = File(dbPath.path + "-wal")
+                val shmFile = File(dbPath.path + "-shm")
+                if (walFile.exists()) walFile.delete()
+                if (shmFile.exists()) shmFile.delete()
+
+                // ✅ 4. 等待文件系统完成所有写入操作
+                delay(1000)  // 增加到 1 秒确保安全
+
+                // ✅ 5. 验证文件完整性（可选但推荐）
+                if (!dbPath.exists() || dbPath.length() < 1024) {
+                    throw Exception("Database file is incomplete after restore")
+                }
+
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.msg_restore_success),
+                        Toast.LENGTH_SHORT
+                    ).show()
+
+                    // 6. 最后才重启
+                    triggerRestart(context)
+                }
             } catch (e: Exception) {
-                withContext(Dispatchers.Main) { Toast.makeText(context, context.getString(R.string.msg_restore_failed, e.message), Toast.LENGTH_LONG).show() }
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.msg_restore_failed, e.message),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
             }
         }
+    }
+
+    private fun triggerRestart(context: Context) {
+        val packageManager = context.packageManager
+        val intent = packageManager.getLaunchIntentForPackage(context.packageName)
+        val componentName = intent?.component
+        val mainIntent = Intent.makeRestartActivityTask(componentName)
+        context.startActivity(mainIntent)
+        Runtime.getRuntime().exit(0)
     }
 
     fun getWeightChartData(granularity: ChartGranularity): Flow<List<ChartDataPoint>> {
@@ -452,7 +565,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun exportHistoryToCsv(context: Context) {}
     fun importWeeklyRoutine(context: Context, csv: String) {}
     suspend fun optimizeExerciseLibrary(): Int = 0
 }

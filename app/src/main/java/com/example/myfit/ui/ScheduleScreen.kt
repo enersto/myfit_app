@@ -12,7 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions // [已添加]
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.automirrored.filled.List
@@ -28,7 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType // [已添加]
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -36,6 +36,7 @@ import com.example.myfit.R
 import com.example.myfit.model.*
 import com.example.myfit.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import java.time.LocalDate
 
 @Composable
@@ -49,16 +50,24 @@ fun ScheduleScreen(navController: NavController, viewModel: MainViewModel) {
     var showImportDialog by remember { mutableStateOf(false) }
     var showManualRoutineDialog by remember { mutableStateOf(false) }
     var showHelpDialog by remember { mutableStateOf(false) }
+    var showProfileDialog by remember { mutableStateOf(false) }
 
+    // 数据库备份 Launcher
     val createBackupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/x-sqlite3")) { uri ->
         uri?.let { viewModel.backupDatabase(it, context) }
     }
 
+    // 数据库恢复 Launcher
     val restoreBackupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let { viewModel.restoreDatabase(it, context) }
     }
 
-    var showProfileDialog by remember { mutableStateOf(false) } // 新增状态
+    // [修复] CSV 导出 Launcher
+    val exportCsvLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+        uri?.let { viewModel.exportHistoryToCsv(it, context) }
+    }
+
+    val scope = rememberCoroutineScope()
 
     LazyColumn(
         modifier = Modifier
@@ -77,11 +86,41 @@ fun ScheduleScreen(navController: NavController, viewModel: MainViewModel) {
             Text(stringResource(R.string.settings_language), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
             Spacer(modifier = Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                LanguageChip("中文", "zh", currentLanguage) { viewModel.switchLanguage("zh"); (context as? Activity)?.recreate() }
-                LanguageChip("EN", "en", currentLanguage) { viewModel.switchLanguage("en"); (context as? Activity)?.recreate() }
-                LanguageChip("ES", "es", currentLanguage) { viewModel.switchLanguage("es"); (context as? Activity)?.recreate() }
-                LanguageChip("JA", "ja", currentLanguage) { viewModel.switchLanguage("ja"); (context as? Activity)?.recreate() }
-                LanguageChip("DE", "de", currentLanguage) { viewModel.switchLanguage("de"); (context as? Activity)?.recreate() }
+                LanguageChip("中文", "zh", currentLanguage) {
+                    scope.launch {
+                        viewModel.switchLanguage("zh")
+                        delay(500)  // ✅ 等待数据库写入
+                        (context as? Activity)?.recreate()
+                    }
+                }
+                LanguageChip("EN", "en", currentLanguage) {
+                    scope.launch {
+                        viewModel.switchLanguage("en")
+                        delay(500)
+                        (context as? Activity)?.recreate()
+                    }
+                }
+                LanguageChip("ES", "es", currentLanguage) {
+                    scope.launch {
+                        viewModel.switchLanguage("es")
+                        delay(500)
+                        (context as? Activity)?.recreate()
+                    }
+                }
+                LanguageChip("JA", "ja", currentLanguage) {
+                    scope.launch {
+                        viewModel.switchLanguage("ja")
+                        delay(500)
+                        (context as? Activity)?.recreate()
+                    }
+                }
+                LanguageChip("DE", "de", currentLanguage) {
+                    scope.launch {
+                        viewModel.switchLanguage("de")
+                        delay(500)
+                        (context as? Activity)?.recreate()
+                    }
+                }
             }
         }
 
@@ -91,8 +130,11 @@ fun ScheduleScreen(navController: NavController, viewModel: MainViewModel) {
             Spacer(modifier = Modifier.height(8.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // [修复] 导出 CSV 按钮
                 Button(
-                    onClick = { viewModel.exportHistoryToCsv(context) },
+                    onClick = {
+                        exportCsvLauncher.launch("myfit_history_${LocalDate.now()}.csv")
+                    },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                     shape = RoundedCornerShape(8.dp)
@@ -115,19 +157,16 @@ fun ScheduleScreen(navController: NavController, viewModel: MainViewModel) {
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // 3) 分割 Help 按钮，增加 Profile 按钮
+            // Help & Profile Buttons
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                // Help 按钮 (缩短一半)
                 OutlinedButton(
                     onClick = { showHelpDialog = true },
-                    modifier = Modifier.weight(1f), // weight 1f
+                    modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    // 为了节省空间，去掉 Icon 或只留文字
                     Text(stringResource(R.string.settings_help_reference), fontSize = 12.sp, maxLines = 1)
                 }
 
-                // Profile 按钮 (新增)
                 OutlinedButton(
                     onClick = { showProfileDialog = true },
                     modifier = Modifier.weight(1f),
@@ -531,13 +570,11 @@ fun ThemeCircle(theme: AppTheme, isSelected: Boolean, onClick: () -> Unit) {
     ) {}
 }
 
-// 新增组件：ProfileEditDialog
+// [唯一] ProfileEditDialog 定义
 @Composable
 fun ProfileEditDialog(viewModel: MainViewModel, onDismiss: () -> Unit) {
     val profile by viewModel.userProfile.collectAsState()
 
-    // [修复] 添加 profile 作为 remember 的 key
-    // 当 ViewModel 从数据库加载完真实数据后，profile 发生变化，这里会重新计算初始值，填入输入框
     var ageInput by remember(profile) { mutableStateOf(if (profile.age > 0) profile.age.toString() else "") }
     var heightInput by remember(profile) { mutableStateOf(if (profile.height > 0) profile.height.toString() else "") }
     var selectedGender by remember(profile) { mutableStateOf(profile.gender) }
