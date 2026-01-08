@@ -209,11 +209,37 @@ fun HistoryCharts(viewModel: MainViewModel) {
             )
         }
 
-        // --- 模块 1: 体重趋势 ---
+// 4) --- 模块 1: 身体状态 (合并 体重 + BMI + BMR) ---
+        item {
+            Text(
+                stringResource(R.string.chart_title_body_status), // "Body Status"
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        // 1.1 体重图表
         item {
             ChartSection(title = stringResource(R.string.chart_title_weight)) { granularity ->
                 val data by viewModel.getWeightChartData(granularity).collectAsState(initial = emptyList())
                 LineChart(data = data)
+            }
+        }
+
+        // 1.2 BMI 图表 (新增)
+        item {
+            ChartSection(title = stringResource(R.string.chart_title_bmi)) { granularity ->
+                val data by viewModel.getBMIChartData(granularity).collectAsState(initial = emptyList())
+                LineChart(data = data, lineColor = Color(0xFFE91E63)) // 使用不同颜色区分
+            }
+        }
+
+        // 1.3 BMR 图表 (新增)
+        item {
+            ChartSection(title = stringResource(R.string.chart_title_bmr)) { granularity ->
+                val data by viewModel.getBMRChartData(granularity).collectAsState(initial = emptyList())
+                LineChart(data = data, lineColor = Color(0xFF9C27B0)) // 使用不同颜色区分
             }
         }
 

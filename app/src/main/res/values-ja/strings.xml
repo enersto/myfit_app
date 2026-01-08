@@ -14,10 +14,10 @@
 
     <string name="apply_routine">今日の計画を適用</string>
     <string name="click_add">または + をタップ</string>
-    <string name="log_weight">体重を記録</string>
+    <string name="log_weight">身体データを記録</string>
     <string name="add_to_today">今日に追加</string>
     <string name="new_manage_lib">ライブラリ管理</string>
-    <string name="dialog_weight_title">体重記録</string>
+    <string name="dialog_weight_title">身体データを記録</string>
 
     <string name="history_title">履歴記録</string>
     <string name="no_history">記録なし。運動しましょう！</string>
@@ -70,7 +70,7 @@
     <string name="label_sets_config">セット詳細</string>
 
     <string name="header_set_no">セット</string>
-    <string name="header_weight_time">重量/時間</string>
+    <string name="header_weight_time">重量</string>
     <string name="header_reps">回数</string>
     <string name="btn_add_set">セット追加</string>
 
@@ -173,5 +173,21 @@
     <string name="dialog_lock_screen_content">ロック画面にタイマーを表示させるためには、設定で「ロック画面通知」と「Workout Timer」内の「ロック画面に表示」を手動で有効にしてください。</string>
     <string name="btn_go_to_settings">設定へ移動</string>
     <string name="btn_later">あとで</string>
+
+    <string name="chart_title_body_status">身体ステータス</string>
+    <string name="label_bmi">BMI</string>
+    <string name="label_bmr">基礎代謝 (Kcal)</string>
+    <string name="label_age">年齢</string>
+    <string name="label_height">身長 (cm)</string>
+    <string name="label_gender">性別</string>
+    <string name="gender_male">男性</string>
+    <string name="gender_female">女性</string>
+    <string name="dialog_profile_title">基本情報設定</string>
+    <string name="settings_profile">基本情報</string>
+    <string name="chart_title_bmi">BMI推移</string>
+    <string name="chart_title_bmr">基礎代謝推移</string>
+    <string name="hint_input_age">年齢</string>
+    <string name="hint_input_height">身長 (cm)</string>
+    <string name="label_weight_kg">体重 (kg)</string>
 
 </resources>

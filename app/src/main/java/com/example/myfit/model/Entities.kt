@@ -14,8 +14,13 @@ data class WorkoutSet(
 @Entity(tableName = "app_settings")
 data class AppSetting(
     @PrimaryKey val id: Int = 0,
-    val themeId: Int = 0,
-    val languageCode: String = "zh"
+    val themeId: Int = 1, // 1) 修改默认值为 1 (GREEN)
+    val languageCode: String = "zh",
+    // 3) 新增字段：年龄、身高(cm)、性别(0=男, 1=女)
+    // 给定默认值以兼容旧数据，虽然数据库迁移会处理，但对象实例化需要默认值
+    val age: Int = 0,
+    val height: Float = 0f,
+    val gender: Int = 0
 )
 
 // V5.0 更新：动作模板增加部位和器械
@@ -89,6 +94,6 @@ enum class AppTheme(val id: Int, val primary: Long, val background: Long, val on
     GREY(4, 0xFF607D8B, 0xFFECEFF1, 0xFF263238);
 
     companion object {
-        fun fromId(id: Int): AppTheme = values().find { it.id == id } ?: DARK
+        fun fromId(id: Int): AppTheme = values().find { it.id == id } ?: GREEN
     }
 }

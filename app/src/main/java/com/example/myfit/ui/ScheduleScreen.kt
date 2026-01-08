@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions // [已添加]
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.automirrored.filled.List
@@ -27,6 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType // [已添加]
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -55,6 +57,8 @@ fun ScheduleScreen(navController: NavController, viewModel: MainViewModel) {
     val restoreBackupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let { viewModel.restoreDatabase(it, context) }
     }
+
+    var showProfileDialog by remember { mutableStateOf(false) } // 新增状态
 
     LazyColumn(
         modifier = Modifier
@@ -111,14 +115,26 @@ fun ScheduleScreen(navController: NavController, viewModel: MainViewModel) {
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            OutlinedButton(
-                onClick = { showHelpDialog = true },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Icon(Icons.AutoMirrored.Filled.HelpOutline, null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(stringResource(R.string.settings_help_reference))
+            // 3) 分割 Help 按钮，增加 Profile 按钮
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Help 按钮 (缩短一半)
+                OutlinedButton(
+                    onClick = { showHelpDialog = true },
+                    modifier = Modifier.weight(1f), // weight 1f
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    // 为了节省空间，去掉 Icon 或只留文字
+                    Text(stringResource(R.string.settings_help_reference), fontSize = 12.sp, maxLines = 1)
+                }
+
+                // Profile 按钮 (新增)
+                OutlinedButton(
+                    onClick = { showProfileDialog = true },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(stringResource(R.string.settings_profile), fontSize = 12.sp, maxLines = 1)
+                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -216,12 +232,13 @@ fun ScheduleScreen(navController: NavController, viewModel: MainViewModel) {
     if (showManualRoutineDialog) {
         ManualRoutineDialog(viewModel, onDismiss = { showManualRoutineDialog = false })
     }
+
+    if (showProfileDialog) {
+        ProfileEditDialog(viewModel, onDismiss = { showProfileDialog = false })
+    }
 }
 
 // ================== Helper Components ==================
-
-// [重要修复] 删除了 getBodyPartResId 和 getEquipmentResId 的定义
-// 它们已经在 ExerciseManagerScreen.kt 中作为 public 函数定义过了，直接调用即可
 
 @Composable
 private fun KeyReferenceDialog(onDismiss: () -> Unit) {
@@ -512,6 +529,69 @@ fun ThemeCircle(theme: AppTheme, isSelected: Boolean, onClick: () -> Unit) {
         color = Color(theme.primary),
         border = BorderStroke(3.dp, borderColor)
     ) {}
+}
+
+// 新增组件：ProfileEditDialog
+@Composable
+fun ProfileEditDialog(viewModel: MainViewModel, onDismiss: () -> Unit) {
+    val profile by viewModel.userProfile.collectAsState()
+
+    // [修复] 添加 profile 作为 remember 的 key
+    // 当 ViewModel 从数据库加载完真实数据后，profile 发生变化，这里会重新计算初始值，填入输入框
+    var ageInput by remember(profile) { mutableStateOf(if (profile.age > 0) profile.age.toString() else "") }
+    var heightInput by remember(profile) { mutableStateOf(if (profile.height > 0) profile.height.toString() else "") }
+    var selectedGender by remember(profile) { mutableStateOf(profile.gender) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.dialog_profile_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                OutlinedTextField(
+                    value = ageInput,
+                    onValueChange = { ageInput = it },
+                    label = { Text(stringResource(R.string.label_age)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = heightInput,
+                    onValueChange = { heightInput = it },
+                    label = { Text(stringResource(R.string.label_height)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.label_gender) + ": ")
+                    Spacer(modifier = Modifier.width(8.dp))
+                    FilterChip(
+                        selected = selectedGender == 0,
+                        onClick = { selectedGender = 0 },
+                        label = { Text(stringResource(R.string.gender_male)) }
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    FilterChip(
+                        selected = selectedGender == 1,
+                        onClick = { selectedGender = 1 },
+                        label = { Text(stringResource(R.string.gender_female)) }
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                val a = ageInput.toIntOrNull() ?: 0
+                val h = heightInput.toFloatOrNull() ?: 0f
+                viewModel.updateProfile(a, h, selectedGender)
+                onDismiss()
+            }) {
+                Text(stringResource(R.string.btn_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.btn_cancel)) }
+        }
+    )
 }
 
 @Composable

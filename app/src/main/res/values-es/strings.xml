@@ -14,10 +14,10 @@
 
     <string name="apply_routine">Aplicar Rutina</string>
     <string name="click_add">O haz clic en +</string>
-    <string name="log_weight">Registrar Peso</string>
+    <string name="log_weight">Registrar datos corporales</string>
     <string name="add_to_today">Añadir a hoy</string>
     <string name="new_manage_lib">Gestionar Biblioteca</string>
-    <string name="dialog_weight_title">Registrar Peso</string>
+    <string name="dialog_weight_title">Registrar datos corporales</string>
 
     <string name="history_title">Registros Históricos</string>
     <string name="no_history">Sin registros, ¡a entrenar!</string>
@@ -70,7 +70,7 @@
     <string name="label_sets_config">Detalles series</string>
 
     <string name="header_set_no">Serie</string>
-    <string name="header_weight_time">Peso/Tiempo</string>
+    <string name="header_weight_time">Peso</string>
     <string name="header_reps">Reps</string>
     <string name="btn_add_set">Añadir serie</string>
 
@@ -171,6 +171,24 @@
 
     <string name="dialog_lock_screen_title">Permiso de pantalla de bloqueo</string>
     <string name="dialog_lock_screen_content">Para asegurar que el temporizador se muestre en la pantalla de bloqueo, habilite manualmente las \'Notificaciones en pantalla de bloqueo\' y \'Mostrar en pantalla de bloqueo\' en \'Workout Timer\'  en la configuración.</string>
+
     <string name="btn_go_to_settings">Ir a Ajustes</string>
     <string name="btn_later">Más tarde</string>
+
+    <string name="chart_title_body_status">Estado corporal</string>
+    <string name="label_bmi">IMC</string>
+    <string name="label_bmr">TMB (Kcal)</string>
+    <string name="label_age">Edad</string>
+    <string name="label_height">Altura (cm)</string>
+    <string name="label_gender">Género</string>
+    <string name="gender_male">Hombre</string>
+    <string name="gender_female">Mujer</string>
+    <string name="dialog_profile_title">Información básica</string>
+    <string name="settings_profile">Info básica</string>
+    <string name="chart_title_bmi">Tendencia IMC</string>
+    <string name="chart_title_bmr">Tendencia TMB</string>
+    <string name="hint_input_age">Edad</string>
+    <string name="hint_input_height">Altura (cm)</string>
+    <string name="label_weight_kg">Peso (kg)</string>
+
 </resources>

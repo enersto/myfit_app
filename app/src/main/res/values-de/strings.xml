@@ -14,10 +14,10 @@
 
     <string name="apply_routine">Plan anwenden</string>
     <string name="click_add">Oder klicke auf +</string>
-    <string name="log_weight">Gewicht loggen</string>
+    <string name="log_weight">Körperdaten erfassen</string>
     <string name="add_to_today">Zu heute hinzufügen</string>
     <string name="new_manage_lib">Bibliothek verwalten</string>
-    <string name="dialog_weight_title">Gewicht erfassen</string>
+    <string name="dialog_weight_title">Körperdaten erfassen</string>
 
     <string name="history_title">Verlauf</string>
     <string name="no_history">Keine Einträge, geh trainieren!</string>
@@ -70,7 +70,7 @@
     <string name="label_sets_config">Satz-Details</string>
 
     <string name="header_set_no">Satz</string>
-    <string name="header_weight_time">Gew./Zeit</string>
+    <string name="header_weight_time">Gew.</string>
     <string name="header_reps">Wdh.</string>
     <string name="btn_add_set">Satz hinzuf.</string>
 
@@ -173,5 +173,21 @@
     <string name="dialog_lock_screen_content">Um sicherzustellen, dass der Timer auf dem Sperrbildschirm angezeigt wird (insbesondere bei Xiaomi/Redmi-Geräten), aktivieren Sie bitte manuell die \'Sperrbildschirm-Benachrichtigungen\' und \'Anzeige auf Sperrbildschirm\' in \'Workout Timer\' in den Einstellungen.</string>
     <string name="btn_go_to_settings">Zu den Einstellungen</string>
     <string name="btn_later">Später</string>
+
+    <string name="chart_title_body_status">Körperstatus</string>
+    <string name="label_bmi">BMI</string>
+    <string name="label_bmr">Grundumsatz (Kcal)</string>
+    <string name="label_age">Alter</string>
+    <string name="label_height">Größe (cm)</string>
+    <string name="label_gender">Geschlecht</string>
+    <string name="gender_male">Männlich</string>
+    <string name="gender_female">Weiblich</string>
+    <string name="dialog_profile_title">Basisdaten verwalten</string>
+    <string name="settings_profile">Basisdaten</string>
+    <string name="chart_title_bmi">BMI-Verlauf</string>
+    <string name="chart_title_bmr">Grundumsatz-Verlauf</string>
+    <string name="hint_input_age">Alter</string>
+    <string name="hint_input_height">Größe (cm)</string>
+    <string name="label_weight_kg">Gewicht (kg)</string>
 
 </resources>

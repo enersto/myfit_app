@@ -15,10 +15,10 @@
 
     <string name="apply_routine">应用今日周计划</string>
     <string name="click_add">或点击右下角 + 号</string>
-    <string name="log_weight">记录体重</string>
+    <string name="log_weight">记录身体情况</string>
     <string name="add_to_today">添加动作到今日</string>
     <string name="new_manage_lib">新建 / 管理动作库</string>
-    <string name="dialog_weight_title">记录体重</string>
+    <string name="dialog_weight_title">记录身体情况</string>
 
     <string name="history_title">历史记录</string>
     <string name="no_history">暂无记录，快去锻炼吧！</string>
@@ -71,7 +71,7 @@
     <string name="label_sets_config">组数详情</string>
 
     <string name="header_set_no">组号</string>
-    <string name="header_weight_time">重量/时长</string>
+    <string name="header_weight_time">重量</string>
     <string name="header_reps">次数</string>
     <string name="btn_add_set">添加组</string>
 
@@ -174,5 +174,21 @@
     <string name="dialog_lock_screen_content">为了确保计时器能显示在锁屏界面，请在设置中手动开启「锁屏通知」和「Workout Timer」中的「锁屏显示」。</string>
     <string name="btn_go_to_settings">前往设置</string>
     <string name="btn_later">稍后</string>
+
+    <string name="chart_title_body_status">身体状态</string>
+    <string name="label_bmi">BMI指数</string>
+    <string name="label_bmr">基础代谢 (Kcal)</string>
+    <string name="label_age">年龄</string>
+    <string name="label_height">身高 (cm)</string>
+    <string name="label_gender">性别</string>
+    <string name="gender_male">男</string>
+    <string name="gender_female">女</string>
+    <string name="dialog_profile_title">基础信息管理</string>
+    <string name="settings_profile">基础信息</string>
+    <string name="chart_title_bmi">BMI 变化趋势</string>
+    <string name="chart_title_bmr">基础代谢率趋势</string>
+    <string name="hint_input_age">岁</string>
+    <string name="hint_input_height">厘米</string>
+    <string name="label_weight_kg">体重 (KG)</string>
 
 </resources>

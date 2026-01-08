@@ -14,10 +14,10 @@
 
     <string name="apply_routine">Apply Routine</string>
     <string name="click_add">Or click + button</string>
-    <string name="log_weight">Log Weight</string>
+    <string name="log_weight">Log Body Stats</string>
     <string name="add_to_today">Add to Today</string>
     <string name="new_manage_lib">Manage Library</string>
-    <string name="dialog_weight_title">Record Weight</string>
+    <string name="dialog_weight_title">Record Body Stats</string>
 
     <string name="history_title">History Records</string>
     <string name="no_history">No records yet, go workout!</string>
@@ -69,7 +69,7 @@
     <string name="label_sets_config">Set Details</string>
 
     <string name="header_set_no">Set</string>
-    <string name="header_weight_time">Weight/Time</string>
+    <string name="header_weight_time">Weight</string>
     <string name="header_reps">Reps</string>
     <string name="btn_add_set">Add Set</string>
 
@@ -172,5 +172,21 @@
     <string name="dialog_lock_screen_content">To ensure the timer displays on the lock screen, please manually enable \'Lock screen notifications\'  and  \'Display on Lock Screen\'  \'Workout Timer\'  in the settings.</string>
     <string name="btn_go_to_settings">Go to Settings</string>
     <string name="btn_later">Later</string>
+
+    <string name="chart_title_body_status">Body Status</string>
+    <string name="label_bmi">BMI</string>
+    <string name="label_bmr">BMR (Kcal)</string>
+    <string name="label_age">Age</string>
+    <string name="label_height">Height (cm)</string>
+    <string name="label_gender">Gender</string>
+    <string name="gender_male">Male</string>
+    <string name="gender_female">Female</string>
+    <string name="dialog_profile_title">Basic Info</string>
+    <string name="settings_profile">Basic Info</string>
+    <string name="chart_title_bmi">BMI Trend</string>
+    <string name="chart_title_bmr">BMR Trend</string>
+    <string name="hint_input_age">Age</string>
+    <string name="hint_input_height">Height</string>
+    <string name="label_weight_kg">Weight (KG)</string>
 
 </resources>

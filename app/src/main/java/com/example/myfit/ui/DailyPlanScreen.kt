@@ -399,33 +399,37 @@ fun TimerSetRow(
 @Composable
 fun HeaderSection(date: LocalDate, dayType: DayType, progress: Float, color: Color, showWeightAlert: Boolean, onWeightClick: () -> Unit) {
     Column {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            val dateText = remember(date) {
-                date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL))
-            }
-            Text(
-                text = dateText,
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onBackground
-            )
+        // 第一行：日期 (独占一行，防止挤压)
+        val dateText = remember(date) {
+            date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL))
+        }
+        Text(
+            text = dateText,
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onBackground
+        )
 
-            Spacer(modifier = Modifier.weight(1f))
-            if (showWeightAlert) {
-                Button(
-                    onClick = onWeightClick,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
-                    modifier = Modifier.height(32.dp),
-                    contentPadding = PaddingValues(horizontal = 8.dp)
-                ) {
-                    Text(stringResource(R.string.log_weight), fontSize = 12.sp)
-                }
+        // 5) 第二行：记录按钮 (单独一行，位于日期和类型之间)
+        if (showWeightAlert) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = onWeightClick,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
+                modifier = Modifier.height(36.dp).align(Alignment.Start), // 左对齐
+                contentPadding = PaddingValues(horizontal = 12.dp)
+            ) {
+                Text(stringResource(R.string.log_weight), fontSize = 14.sp)
             }
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(24.dp)) // 拉开间距
 
+        // 第三行：类型
         Text(stringResource(dayType.labelResId), color = color, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+
         Spacer(modifier = Modifier.height(12.dp))
+
+        // 进度条
         LinearProgressIndicator(
             progress = { progress },
             modifier = Modifier.fillMaxWidth().height(12.dp).clip(RoundedCornerShape(6.dp)),
@@ -518,8 +522,94 @@ fun AddExerciseSheet(viewModel: MainViewModel, navController: NavController, onD
 
 @Composable
 fun WeightDialog(viewModel: MainViewModel, onDismiss: () -> Unit) {
+    val profile by viewModel.userProfile.collectAsState()
+
+    // 逻辑判定：是否需要显示详细信息
+    // 规则：第一次记录(身高/年龄为0) 或者 年龄 < 22 岁时，需要确认身高年龄
+    val needFullInfo = remember(profile) {
+        profile.height == 0f || profile.age == 0 || profile.age < 22
+    }
+
     var weightInput by remember { mutableStateOf("") }
-    AlertDialog(onDismissRequest = onDismiss, confirmButton = { Button(onClick = { weightInput.toFloatOrNull()?.let { viewModel.logWeight(it) }; onDismiss() }) { Text(stringResource(R.string.btn_save)) } }, title = { Text(stringResource(R.string.dialog_weight_title)) }, text = { OutlinedTextField(value = weightInput, onValueChange = { weightInput = it }, label = { Text("KG") }) })
+    var ageInput by remember { mutableStateOf(if (profile.age > 0) profile.age.toString() else "") }
+    var heightInput by remember { mutableStateOf(if (profile.height > 0) profile.height.toString() else "") }
+    var selectedGender by remember { mutableStateOf(profile.gender) } // 0 male, 1 female
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(if (needFullInfo) R.string.dialog_profile_title else R.string.dialog_weight_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // 1. 体重 (必填)
+                OutlinedTextField(
+                    value = weightInput,
+                    onValueChange = { weightInput = it },
+                    label = { Text(stringResource(R.string.label_weight_kg)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true
+                )
+
+                // 2. 详细信息 (条件显示)
+                if (needFullInfo) {
+                    HorizontalDivider()
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = ageInput,
+                            onValueChange = { ageInput = it },
+                            label = { Text(stringResource(R.string.hint_input_age)) }, // "Age"
+                            modifier = Modifier.weight(1f),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = heightInput,
+                            onValueChange = { heightInput = it },
+                            label = { Text(stringResource(R.string.hint_input_height)) }, // "Height"
+                            modifier = Modifier.weight(1f),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true
+                        )
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(stringResource(R.string.label_gender) + ": ", style = MaterialTheme.typography.bodyMedium)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        FilterChip(
+                            selected = selectedGender == 0,
+                            onClick = { selectedGender = 0 },
+                            label = { Text(stringResource(R.string.gender_male)) }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        FilterChip(
+                            selected = selectedGender == 1,
+                            onClick = { selectedGender = 1 },
+                            label = { Text(stringResource(R.string.gender_female)) }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                val w = weightInput.toFloatOrNull()
+                if (w != null) {
+                    // 如果显示了详细信息，则解析并更新；否则传 null (保持原值)
+                    val a = if (needFullInfo) ageInput.toIntOrNull() else null
+                    val h = if (needFullInfo) heightInput.toFloatOrNull() else null
+                    val g = if (needFullInfo) selectedGender else null
+
+                    viewModel.logWeightAndProfile(w, a, h, g)
+                    onDismiss()
+                }
+            }) {
+                Text(stringResource(R.string.btn_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.btn_cancel)) }
+        }
+    )
 }
 
 @Composable

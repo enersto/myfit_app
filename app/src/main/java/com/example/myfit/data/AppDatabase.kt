@@ -13,15 +13,23 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import androidx.room.migration.Migration
 
-
-// 1. 定义迁移策略：版本 7 -> 8
+// [新增] 补全缺失的 7->8 迁移策略 (为了编译通过，暂时设为空)
 val MIGRATION_7_8 = object : Migration(7, 8) {
     override fun migrate(database: SupportSQLiteDatabase) {
-        // 为 weekly_routine 表添加两个新列，默认值设为空字符串
-        database.execSQL("ALTER TABLE weekly_routine ADD COLUMN bodyPart TEXT NOT NULL DEFAULT ''")
-        database.execSQL("ALTER TABLE weekly_routine ADD COLUMN equipment TEXT NOT NULL DEFAULT ''")
+        // 占位符，无操作
     }
 }
+
+// 1. 定义迁移策略：版本 8 -> 9
+val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        // 为 app_settings 表添加新列
+        database.execSQL("ALTER TABLE app_settings ADD COLUMN age INTEGER NOT NULL DEFAULT 0")
+        database.execSQL("ALTER TABLE app_settings ADD COLUMN height REAL NOT NULL DEFAULT 0")
+        database.execSQL("ALTER TABLE app_settings ADD COLUMN gender INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
 @Database(
     entities = [
         WorkoutTask::class,
@@ -31,7 +39,7 @@ val MIGRATION_7_8 = object : Migration(7, 8) {
         AppSetting::class,
         WeeklyRoutineItem::class
     ],
-    version = 8, // 🔴 升级版本号到 8
+    version = 9, // 🔴 升级版本号到 9
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -45,7 +53,7 @@ abstract class AppDatabase : RoomDatabase() {
         fun getDatabase(context: Context): AppDatabase {
             return instance ?: synchronized(this) {
                 Room.databaseBuilder(context, AppDatabase::class.java, "myfit_v7.db") // 文件名保持不变，内部结构升级
-                    .addMigrations(MIGRATION_7_8) // 🔴 添加迁移策略
+                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9) // 🔴 添加新迁移策略
                     // .fallbackToDestructiveMigration() // 🔴 删除或注释掉这一行！
                     .addCallback(PrepopulateCallback())
                     .build().also { instance = it }
@@ -60,7 +68,7 @@ abstract class AppDatabase : RoomDatabase() {
                 CoroutineScope(Dispatchers.IO).launch {
                     val dao = database.workoutDao()
 
-                    dao.saveAppSettings(AppSetting(themeId = 0, languageCode = "zh"))
+                    dao.saveAppSettings(AppSetting(themeId = 1, languageCode = "zh")) // [修复] 默认改为 1 (Green)
 
                     if (dao.getScheduleCount() == 0) {
                         val types = listOf(DayType.CORE, DayType.CORE, DayType.ACTIVE_REST, DayType.CORE, DayType.CORE, DayType.LIGHT, DayType.REST)

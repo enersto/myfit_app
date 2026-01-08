@@ -41,13 +41,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // --- Theme & Language ---
     val currentTheme = dao.getAppSettings()
-        .map { it?.themeId ?: 0 }
+        .map { it?.themeId ?: 1 }
         .map { AppTheme.fromId(it) }
         .stateIn(viewModelScope, SharingStarted.Lazily, AppTheme.DARK)
 
     val currentLanguage = dao.getAppSettings()
         .map { it?.languageCode ?: "zh" }
         .stateIn(viewModelScope, SharingStarted.Lazily, "zh")
+
+    // --- User Profile (New) ---
+    val userProfile = dao.getAppSettings()
+        .filterNotNull()
+        .stateIn(viewModelScope, SharingStarted.Lazily, AppSetting()) // 默认空对象
+
 
     // --- Schedule ---
     val allSchedules: Flow<List<ScheduleConfig>> = dao.getAllSchedules()
@@ -73,6 +79,84 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val allTemplates: Flow<List<ExerciseTemplate>> = dao.getAllTemplates()
     val historyRecords: Flow<List<WorkoutTask>> = dao.getAllHistoryTasks()
     val weightHistory: Flow<List<WeightRecord>> = dao.getAllWeightRecords()
+
+    // --- Chart Data Logic (New for BMI/BMR) ---
+
+    // 计算 BMI: kg / (m^2)
+    private fun calculateBMI(weight: Float, heightCm: Float): Float {
+        if (heightCm <= 0) return 0f
+        val heightM = heightCm / 100f
+        return weight / (heightM * heightM)
+    }
+
+    // 计算 BMR (Mifflin-St Jeor 公式)
+    private fun calculateBMR(weight: Float, heightCm: Float, age: Int, gender: Int): Float {
+        // Gender: 0=Male, 1=Female
+        if (heightCm <= 0 || age <= 0) return 0f
+        val s = if (gender == 0) 5 else -161
+        return (10 * weight) + (6.25f * heightCm) - (5 * age) + s
+    }
+
+    // 4) 获取 BMI 图表数据
+    // 注意：历史记录里没有存当时的身高，所以我们使用当前的身高来估算历史 BMI/BMR
+    // 这是一个常见的简化处理。
+    fun getBMIChartData(granularity: ChartGranularity): Flow<List<ChartDataPoint>> {
+        return combine(weightHistory, userProfile) { weights, profile ->
+            val raw = weights.map {
+                val bmi = calculateBMI(it.weight, profile.height)
+                Pair(LocalDate.parse(it.date), bmi)
+            }
+            groupAndFormatData(raw, granularity)
+        }
+    }
+
+    fun getBMRChartData(granularity: ChartGranularity): Flow<List<ChartDataPoint>> {
+        return combine(weightHistory, userProfile) { weights, profile ->
+            val raw = weights.map {
+                val bmr = calculateBMR(it.weight, profile.height, profile.age, profile.gender)
+                Pair(LocalDate.parse(it.date), bmr)
+            }
+            groupAndFormatData(raw, granularity)
+        }
+    }
+
+    // 辅助函数：处理图表数据分组和格式化 (复用原有的逻辑)
+    private fun groupAndFormatData(raw: List<Pair<LocalDate, Float>>, granularity: ChartGranularity): List<ChartDataPoint> {
+        val grouped = when (granularity) {
+            ChartGranularity.DAILY -> raw.groupBy { it.first }
+            ChartGranularity.MONTHLY -> raw.groupBy { it.first.withDayOfMonth(1) }
+        }
+        return grouped.map { (date, list) ->
+            ChartDataPoint(
+                date,
+                list.map { it.second }.average().toFloat(),
+                date.format(DateTimeFormatter.ofPattern("MM/dd"))
+            )
+        }.sortedBy { it.date }
+    }
+
+    // --- Actions ---
+
+    // 2) & 3) 更新 LogWeight 逻辑：同时更新用户信息
+    fun logWeightAndProfile(weight: Float, age: Int?, height: Float?, gender: Int?) = viewModelScope.launch {
+        // 1. 记录体重
+        dao.insertWeight(WeightRecord(date = LocalDate.now().toString(), weight = weight))
+
+        // 2. 更新 Profile (如果有输入)
+        val currentSettings = userProfile.value
+        val newSettings = currentSettings.copy(
+            age = age ?: currentSettings.age,
+            height = height ?: currentSettings.height,
+            gender = gender ?: currentSettings.gender
+        )
+        dao.saveAppSettings(newSettings)
+    }
+
+    // 单独更新 Profile (用于设置页面)
+    fun updateProfile(age: Int, height: Float, gender: Int) = viewModelScope.launch {
+        val currentSettings = userProfile.value
+        dao.saveAppSettings(currentSettings.copy(age = age, height = height, gender = gender))
+    }
 
     // --- Timer State ---
     data class TimerState(
