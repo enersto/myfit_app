@@ -168,4 +168,9 @@
     <string name="label_reps">Reps</string>
     <string name="label_target">Objetivo</string>
     <string name="no_plan">No hay plan para hoy. ¡Disfruta el día!</string>
+
+    <string name="dialog_lock_screen_title">Permiso de pantalla de bloqueo</string>
+    <string name="dialog_lock_screen_content">Para asegurar que el temporizador se muestre en la pantalla de bloqueo, habilite manualmente las \'Notificaciones en pantalla de bloqueo\' y \'Mostrar en pantalla de bloqueo\' en \'Workout Timer\'  en la configuración.</string>
+    <string name="btn_go_to_settings">Ir a Ajustes</string>
+    <string name="btn_later">Más tarde</string>
 </resources>

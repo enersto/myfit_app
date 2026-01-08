@@ -38,6 +38,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.myfit.R
 import com.example.myfit.model.*
+import com.example.myfit.util.NotificationHelper
 import com.example.myfit.viewmodel.MainViewModel
 import kotlinx.coroutines.delay
 import java.time.LocalDate
@@ -59,6 +60,10 @@ fun DailyPlanScreen(viewModel: MainViewModel, navController: NavController) {
     val tasks by viewModel.todayTasks.collectAsState(initial = emptyList<WorkoutTask>())
     val showWeightAlert by viewModel.showWeightAlert.collectAsState()
     val timerState by viewModel.timerState.collectAsStateWithLifecycle()
+
+    // [新增] 监听是否已展示过引导
+    val hasShownGuide by viewModel.hasShownLockScreenGuide.collectAsState()
+
     val progress = if (tasks.isEmpty()) 0f else tasks.count { it.isCompleted } / tasks.size.toFloat()
     val themeColor = MaterialTheme.colorScheme.primary
 
@@ -66,10 +71,23 @@ fun DailyPlanScreen(viewModel: MainViewModel, navController: NavController) {
     var showWeightDialog by remember { mutableStateOf(false) }
     var showExplosion by remember { mutableStateOf(false) }
 
+    // [新增] 控制锁屏引导弹窗的状态
+    var showLockScreenSetupDialog by remember { mutableStateOf(false) }
+
     val context = LocalContext.current
+
+    // [修改] 权限回调：如果同意了通知权限，且从未展示过引导，则弹窗
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
-        onResult = { if (!it) Toast.makeText(context, "Notification permission required", Toast.LENGTH_SHORT).show() }
+        onResult = { isGranted ->
+            if (isGranted) {
+                if (!hasShownGuide) {
+                    showLockScreenSetupDialog = true
+                }
+            } else {
+                Toast.makeText(context, "Notification permission required", Toast.LENGTH_SHORT).show()
+            }
+        }
     )
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -84,13 +102,10 @@ fun DailyPlanScreen(viewModel: MainViewModel, navController: NavController) {
             }
         ) { padding ->
             // [注意] 这里的 padding(16.dp) 确保了与 HistoryScreen 和 ScheduleScreen 的根 padding 一致
-            // HistoryScreen 是 Column(modifier = Modifier.padding(16.dp))
-            // ScheduleScreen 是 LazyColumn(contentPadding = PaddingValues(16.dp))
             Column(modifier = Modifier.padding(padding).padding(16.dp)) {
 
                 HeaderSection(date, dayType, progress, themeColor, showWeightAlert) { showWeightDialog = true }
 
-                // [修改] 这里的间距调整为 16.dp，与 ScheduleScreen 中 item 间距保持一致
                 Spacer(modifier = Modifier.height(16.dp))
 
                 if (tasks.isEmpty()) {
@@ -122,9 +137,42 @@ fun DailyPlanScreen(viewModel: MainViewModel, navController: NavController) {
         if (showExplosion) ExplosionEffect { showExplosion = false }
         if (showAddSheet) AddExerciseSheet(viewModel, navController) { showAddSheet = false }
         if (showWeightDialog) WeightDialog(viewModel) { showWeightDialog = false }
+
+        // [新增] 锁屏通知引导弹窗 (完全使用资源字符串)
+        if (showLockScreenSetupDialog) {
+            AlertDialog(
+                onDismissRequest = {
+                    // 点击外部取消时，也视为“已读”，不再打扰
+                    viewModel.markLockScreenGuideShown()
+                    showLockScreenSetupDialog = false
+                },
+                title = { Text(stringResource(R.string.dialog_lock_screen_title)) },
+                text = { Text(stringResource(R.string.dialog_lock_screen_content)) },
+                confirmButton = {
+                    Button(onClick = {
+                        // 点击去设置，标记为已读
+                        viewModel.markLockScreenGuideShown()
+                        NotificationHelper.openNotificationSettings(context)
+                        showLockScreenSetupDialog = false
+                    }) {
+                        Text(stringResource(R.string.btn_go_to_settings))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        // 点击稍后，标记为已读（不再打扰）
+                        viewModel.markLockScreenGuideShown()
+                        showLockScreenSetupDialog = false
+                    }) {
+                        Text(stringResource(R.string.btn_later))
+                    }
+                }
+            )
+        }
     }
 }
 
+// ... AdvancedTaskItem 及后续代码保持不变 ...
 @Composable
 fun AdvancedTaskItem(
     task: WorkoutTask,
@@ -348,22 +396,13 @@ fun TimerSetRow(
     }
 }
 
-// ------------------------------------------------------------------------
-// [修改] 头部区域
-// 1. 使用系统日期格式 (headlineSmall + onBackground)
-// 2. 增加中间 Spacer(32.dp) 拉开日期和 DayType 的距离
-// ------------------------------------------------------------------------
 @Composable
 fun HeaderSection(date: LocalDate, dayType: DayType, progress: Float, color: Color, showWeightAlert: Boolean, onWeightClick: () -> Unit) {
     Column {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-
             val dateText = remember(date) {
                 date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL))
             }
-
-            // [位置修复] 这里的 Text 直接处于 Column(padding=16) 之下，与 HistoryScreen 的 Title 处于相同层级
-            // headlineSmall 的行高一致，能保证视觉对齐
             Text(
                 text = dateText,
                 style = MaterialTheme.typography.headlineSmall,
@@ -383,11 +422,10 @@ fun HeaderSection(date: LocalDate, dayType: DayType, progress: Float, color: Col
             }
         }
 
-        // [新增] 显著拉开日期和下方的距离，使 DayType 沉底
         Spacer(modifier = Modifier.height(32.dp))
 
         Text(stringResource(dayType.labelResId), color = color, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(12.dp)) // 进度条上方稍微紧凑一点
+        Spacer(modifier = Modifier.height(12.dp))
         LinearProgressIndicator(
             progress = { progress },
             modifier = Modifier.fillMaxWidth().height(12.dp).clip(RoundedCornerShape(6.dp)),

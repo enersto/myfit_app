@@ -169,4 +169,9 @@
     <string name="label_target">目標</string>
     <string name="no_plan">今日の予定はありません。良い一日を！</string>
 
+    <string name="dialog_lock_screen_title">ロック画面の表示権限</string>
+    <string name="dialog_lock_screen_content">ロック画面にタイマーを表示させるためには、設定で「ロック画面通知」と「Workout Timer」内の「ロック画面に表示」を手動で有効にしてください。</string>
+    <string name="btn_go_to_settings">設定へ移動</string>
+    <string name="btn_later">あとで</string>
+
 </resources>

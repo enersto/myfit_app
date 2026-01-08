@@ -2,11 +2,12 @@ package com.example.myfit.viewmodel
 
 import android.app.Application
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.sqlite.db.SimpleSQLiteQuery
 import com.example.myfit.R
 import com.example.myfit.data.AppDatabase
 import com.example.myfit.data.WorkoutDao
@@ -14,6 +15,7 @@ import com.example.myfit.model.*
 import com.example.myfit.ui.ChartDataPoint
 import com.example.myfit.ui.ChartGranularity
 import com.example.myfit.util.NotificationHelper
+import com.example.myfit.util.TimerService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -87,10 +89,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var timerJob: Job? = null
 
     init {
+        // [修复] 确保在 App 启动时就创建好通道
         NotificationHelper.createNotificationChannel(application)
     }
 
-    // --- Timer Logic ---
+    // [新增] SharedPreferences 用于保存一些一次性的 UI 状态
+    private val prefs = application.getSharedPreferences("myfit_prefs", Context.MODE_PRIVATE)
+
+    // [新增] 状态流：是否已经展示过锁屏引导
+    private val _hasShownLockScreenGuide = MutableStateFlow(prefs.getBoolean("key_lockscreen_guide_shown", false))
+    val hasShownLockScreenGuide = _hasShownLockScreenGuide.asStateFlow()
+
+    // --- Timer Logic (Updated for Foreground Service) ---
+    // [新增] 标记为已展示（下次不再弹）
+    fun markLockScreenGuideShown() {
+        prefs.edit().putBoolean("key_lockscreen_guide_shown", true).apply()
+        _hasShownLockScreenGuide.value = true
+    }
+
     fun startTimer(context: Context, taskId: Long, setIndex: Int, durationMinutes: Int) {
         val current = _timerState.value
         val initialSeconds = if (current.taskId == taskId && current.setIndex == setIndex && current.isPaused) {
@@ -100,21 +116,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             durationMinutes * 60
         }
 
+        // 更新 UI 状态
         _timerState.value = TimerState(taskId, setIndex, durationMinutes * 60, initialSeconds, true, false)
 
-        timerJob?.cancel()
-        timerJob = viewModelScope.launch(Dispatchers.Default) {
+        // 计算结束时间
+        val endTimeMillis = System.currentTimeMillis() + (initialSeconds * 1000)
+
+        // [新增] 启动前台服务 Service
+        // 这一步是将 App 提升为前台进程的关键，确保锁屏可见
+        viewModelScope.launch(Dispatchers.IO) {
             val task = dao.getTaskById(taskId)
             val taskName = task?.name ?: "Training"
 
-            val endTimeMillis = System.currentTimeMillis() + (initialSeconds * 1000)
-
-            withContext(Dispatchers.Main) {
-                NotificationHelper.updateTimerNotification(context, taskName, endTimeMillis)
+            val intent = Intent(context, TimerService::class.java).apply {
+                action = TimerService.ACTION_START_TIMER
+                putExtra(TimerService.EXTRA_TASK_NAME, taskName)
+                putExtra(TimerService.EXTRA_END_TIME, endTimeMillis)
             }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        }
+
+        // 启动协程：仅用于 UI 倒计时更新 和 刷新 Notification 时间文本
+        timerJob?.cancel()
+        timerJob = viewModelScope.launch(Dispatchers.Default) {
+            // 获取 TaskName 用于 updateTimerNotification
+            val task = dao.getTaskById(taskId)
+            val taskName = task?.name ?: "Training"
 
             while (_timerState.value.remainingSeconds > 0 && _timerState.value.isRunning) {
                 try {
+                    // 刷新通知栏上的倒计时文字
                     withContext(Dispatchers.Main) {
                         NotificationHelper.updateTimerNotification(context, taskName, endTimeMillis)
                     }
@@ -124,9 +160,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _timerState.update { it.copy(remainingSeconds = it.remainingSeconds - 1) }
             }
 
+            // 倒计时结束
             if (_timerState.value.remainingSeconds <= 0 && _timerState.value.isRunning) {
                 withContext(Dispatchers.Main) {
-                    try { NotificationHelper.cancelNotification(context) } catch (e: Exception) { e.printStackTrace() }
+                    stopService(context) // 停止服务
                     onTimerFinished(taskId, setIndex, durationMinutes)
                 }
             }
@@ -136,13 +173,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun pauseTimer(context: Context) {
         _timerState.update { it.copy(isRunning = false, isPaused = true) }
         timerJob?.cancel()
+
+        // 暂停时，我们停止前台服务（因为不再是活跃计时），或者你可以选择保留服务但更新通知为“已暂停”
+        // 这里选择发送一个 updateTimerNotification 将通知变为 "Paused" 状态
+        // 注意：如果要长期暂停并保持锁屏显示，Service 应该继续运行。但通常暂停意味着用户在操作手机。
+        // 为了省电和逻辑简单，这里仅更新 UI。
+        // 若要更严谨，可以向 Service 发送 ACTION_PAUSE (如果实现了的话)，或者就在这里更新 Notification：
         try { NotificationHelper.updateTimerNotification(context, null, null) } catch (e: Exception) { e.printStackTrace() }
     }
 
     fun stopTimer(context: Context) {
         _timerState.value = TimerState()
         timerJob?.cancel()
-        try { NotificationHelper.cancelNotification(context) } catch (e: Exception) { e.printStackTrace() }
+        stopService(context)
+    }
+
+    // [新增] 辅助函数：停止服务
+    private fun stopService(context: Context) {
+        try {
+            val intent = Intent(context, TimerService::class.java).apply {
+                action = TimerService.ACTION_STOP_TIMER
+            }
+            context.startService(intent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            // 兜底：直接取消通知
+            NotificationHelper.cancelNotification(context)
+        }
     }
 
     private suspend fun onTimerFinished(taskId: Long, setIndex: Int, durationMinutes: Int) {

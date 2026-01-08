@@ -168,4 +168,9 @@
     <string name="label_target">Target</string>
     <string name="no_plan">No workout planned today. Enjoy your day!</string>
 
+    <string name="dialog_lock_screen_title">Lock Screen Permission</string>
+    <string name="dialog_lock_screen_content">To ensure the timer displays on the lock screen, please manually enable \'Lock screen notifications\'  and  \'Display on Lock Screen\'  \'Workout Timer\'  in the settings.</string>
+    <string name="btn_go_to_settings">Go to Settings</string>
+    <string name="btn_later">Later</string>
+
 </resources>

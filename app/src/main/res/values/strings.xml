@@ -170,4 +170,9 @@
     <string name="label_target">目标</string>
     <string name="no_plan">今日暂无训练计划，去享受生活吧！</string>
 
+    <string name="dialog_lock_screen_title">锁屏显示权限</string>
+    <string name="dialog_lock_screen_content">为了确保计时器能显示在锁屏界面，请在设置中手动开启「锁屏通知」和「Workout Timer」中的「锁屏显示」。</string>
+    <string name="btn_go_to_settings">前往设置</string>
+    <string name="btn_later">稍后</string>
+
 </resources>

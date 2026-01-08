@@ -168,4 +168,10 @@
     <string name="label_reps">Wdh.</string>
     <string name="label_target">Ziel</string>
     <string name="no_plan">Kein Training für heute geplant. Genieß den Tag!</string>
+
+    <string name="dialog_lock_screen_title">Sperrbildschirm-Berechtigung</string>
+    <string name="dialog_lock_screen_content">Um sicherzustellen, dass der Timer auf dem Sperrbildschirm angezeigt wird (insbesondere bei Xiaomi/Redmi-Geräten), aktivieren Sie bitte manuell die \'Sperrbildschirm-Benachrichtigungen\' und \'Anzeige auf Sperrbildschirm\' in \'Workout Timer\' in den Einstellungen.</string>
+    <string name="btn_go_to_settings">Zu den Einstellungen</string>
+    <string name="btn_later">Später</string>
+
 </resources>
