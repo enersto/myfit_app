@@ -1,6 +1,6 @@
-# myFit - Personal Workout Tracker & Memo (V5.7)
+# Gymnota - Personal Workout Tracker & Memo (V5.7)
 
-**myFit** is a personal fitness tracking and memo application developed using Android Jetpack Compose. It aims to help users plan weekly training routines, log daily check-ins, and visualize training volume and body status changes in depth through **native charts**.
+**Gymnota** is a personal fitness tracking and memo application developed using Android Jetpack Compose. It aims to help users plan weekly training routines, log daily check-ins, and visualize training volume and body status changes in depth through **native charts**.
 
 🚀 **Major Update V5.7**: Adds body metrics management (BMI/BMR automatic analysis), completely refactors the timer service (supports persistent lock screen display and prevents background killing), and optimizes the notification permission guidance experience.
 
@@ -122,3 +122,4 @@ Supports automatically expanding the exercise library via CSV import. The recomm
 * **Author**: Designed & Built by enersto & Hajimi
 
 ---
+
