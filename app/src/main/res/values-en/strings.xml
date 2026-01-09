@@ -69,7 +69,7 @@
     <string name="label_sets_config">Set Details</string>
 
     <string name="header_set_no">Set</string>
-    <string name="header_weight_time">Weight</string>
+    <string name="header_weight_time">Weight/kg</string>
     <string name="header_reps">Reps</string>
     <string name="btn_add_set">Add Set</string>
 

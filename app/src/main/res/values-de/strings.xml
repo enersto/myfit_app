@@ -70,7 +70,7 @@
     <string name="label_sets_config">Satz-Details</string>
 
     <string name="header_set_no">Satz</string>
-    <string name="header_weight_time">Gew.</string>
+    <string name="header_weight_time">Gew./kg</string>
     <string name="header_reps">Wdh.</string>
     <string name="btn_add_set">Satz hinzuf.</string>
 

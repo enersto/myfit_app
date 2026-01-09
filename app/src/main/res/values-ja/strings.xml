@@ -70,7 +70,7 @@
     <string name="label_sets_config">セット詳細</string>
 
     <string name="header_set_no">セット</string>
-    <string name="header_weight_time">重量</string>
+    <string name="header_weight_time">重量/kg</string>
     <string name="header_reps">回数</string>
     <string name="btn_add_set">セット追加</string>
 

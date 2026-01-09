@@ -70,7 +70,7 @@
     <string name="label_sets_config">Detalles series</string>
 
     <string name="header_set_no">Serie</string>
-    <string name="header_weight_time">Peso</string>
+    <string name="header_weight_time">Peso/kg</string>
     <string name="header_reps">Reps</string>
     <string name="btn_add_set">Añadir serie</string>
 
