@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">myFit</string>
+    <string name="app_name">健身记</string>
 
     <string name="tab_home">打卡</string>
     <string name="tab_history">历史</string>
@@ -61,7 +61,7 @@
     <string name="category_cardio">有氧</string>
     <string name="confirm_delete">确认删除</string>
 
-    <string name="about_version_format">myFit %1$s</string>
+    <string name="about_version_format">健身记 %1$s</string>
     <string name="about_credit">由enersto &amp; 哈吉米设计开发 </string>
 
     <string name="category_core">核心</string>

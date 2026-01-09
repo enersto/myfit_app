@@ -1,3 +1,5 @@
+// ChartComponents.kt (请完全覆盖此文件或修改对应函数)
+
 package com.example.myfit.ui
 
 import androidx.compose.foundation.Canvas
@@ -5,6 +7,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -40,12 +44,20 @@ fun ChartSection(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            // [修复 Bug 3]：标题布局优化，使用 weight(1f) 允许长标题自动换行，防止挤压按钮
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically // 垂直居中，或者 Top
             ) {
-                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f).padding(end = 8.dp) // 占据剩余空间
+                )
+
+                // 按钮组保持紧凑
                 Row(
                     modifier = Modifier
                         .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
@@ -63,7 +75,7 @@ fun ChartSection(
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
-            Box(modifier = Modifier.height(220.dp).fillMaxWidth()) { // 稍微增加高度以容纳数值标签
+            Box(modifier = Modifier.height(220.dp).fillMaxWidth()) {
                 content(granularity)
             }
         }
@@ -96,34 +108,58 @@ fun SingleExerciseSection(
 ) {
     var selectedExercise by remember { mutableStateOf("") }
     val exercises by viewModel.getExerciseNamesByCategory(category).collectAsStateWithLifecycle(initialValue = emptyList())
+    var expanded by remember { mutableStateOf(false) } // 控制下拉菜单
 
     if (exercises.isNotEmpty()) {
         if (selectedExercise.isEmpty()) selectedExercise = exercises.first()
 
         Column {
+            // [修复 Bug 2]：将原来的 LazyRow FilterChip 改为 DropdownMenu 下拉选择
+            Box(modifier = Modifier.wrapContentSize(Alignment.TopStart)) {
+                // 触发按钮 (显示当前选中项 + 下拉箭头)
+                OutlinedButton(
+                    onClick = { expanded = true },
+                    modifier = Modifier.fillMaxWidth(), // 或者 wrapContentWidth
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    Text(selectedExercise, style = MaterialTheme.typography.bodyMedium)
+                    Spacer(modifier = Modifier.weight(1f))
+                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Select Exercise")
+                }
+
+                // 下拉菜单内容
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                    modifier = Modifier.heightIn(max = 300.dp) // 限制高度，支持滚动
+                ) {
+                    exercises.forEach { name ->
+                        DropdownMenuItem(
+                            text = { Text(name) },
+                            onClick = {
+                                selectedExercise = name
+                                expanded = false
+                            },
+                            colors = MenuDefaults.itemColors(
+                                textColor = if (name == selectedExercise) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            )
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // 图表区域保持不变
             ChartSection(title = title) { granularity ->
                 val data by viewModel.getSingleExerciseChartData(selectedExercise, mode, granularity).collectAsStateWithLifecycle(initialValue = emptyList())
                 LineChart(data = data)
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(exercises.size) { index ->
-                    val name = exercises[index]
-                    FilterChip(
-                        selected = name == selectedExercise,
-                        onClick = { selectedExercise = name },
-                        label = { Text(name) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    )
-                }
             }
         }
     }
 }
 
+// ... LineChart 和 BarChart 代码保持不变 (之前版本已提供) ...
 @Composable
 fun LineChart(
     data: List<ChartDataPoint>,
@@ -138,11 +174,10 @@ fun LineChart(
     }
 
     val yValues = data.map { it.value }
-    val maxVal = (yValues.maxOrNull() ?: 100f) * 1.2f // 增加顶部留白
+    val maxVal = (yValues.maxOrNull() ?: 100f) * 1.2f
     val minVal = (yValues.minOrNull() ?: 0f) * 0.8f
     val yRange = if (maxVal - minVal == 0f) 1f else maxVal - minVal
 
-    // 文字画笔
     val textPaint = android.graphics.Paint().apply {
         color = android.graphics.Color.GRAY
         textSize = 28f
@@ -160,10 +195,8 @@ fun LineChart(
         val height = size.height
         val pointSpacing = if (data.size > 1) width / (data.size - 1) else 0f
 
-        // 绘制坐标轴
         drawLine(Color.LightGray.copy(alpha = 0.5f), Offset(0f, height), Offset(width, height), 2f)
 
-        // 绘制折线
         if (data.size > 1) {
             for (i in 0 until data.size - 1) {
                 val x1 = i * pointSpacing
@@ -180,16 +213,13 @@ fun LineChart(
             }
         }
 
-        // 绘制点和数值
         for (i in data.indices) {
             val x = i * pointSpacing
             val y = height - ((data[i].value - minVal) / yRange) * height
 
-            // 绘制点
             drawCircle(color = Color.White, radius = 10f, center = Offset(x, y))
             drawCircle(color = lineColor, radius = 7f, center = Offset(x, y))
 
-            // 绘制数值 (如果点不多，或者只绘制极值)
             if (data.size < 15 || i == 0 || i == data.lastIndex || data[i].value == yValues.maxOrNull()) {
                 drawContext.canvas.nativeCanvas.drawText(
                     String.format("%.1f", data[i].value),
@@ -199,7 +229,6 @@ fun LineChart(
                 )
             }
 
-            // 绘制日期标签 (间隔绘制，避免拥挤)
             if (data.size < 8 || i % (data.size / 5) == 0) {
                 drawContext.canvas.nativeCanvas.drawText(
                     data[i].label,
@@ -248,17 +277,15 @@ fun BarChart(
 
         for (i in data.indices) {
             val barHeight = (data[i].value / maxVal) * height
-            val x = i * spacing + (spacing / 2) // 居中
+            val x = i * spacing + (spacing / 2)
             val y = height - barHeight
 
-            // 绘制柱子
             drawRect(
                 color = barColor,
                 topLeft = Offset(x - barWidth/2, y),
                 size = Size(barWidth, barHeight)
             )
 
-            // 绘制数值
             if (data[i].value > 0) {
                 drawContext.canvas.nativeCanvas.drawText(
                     String.format("%.0f", data[i].value),
@@ -268,7 +295,6 @@ fun BarChart(
                 )
             }
 
-            // 绘制日期
             if (data.size < 8 || i % (data.size / 5) == 0) {
                 drawContext.canvas.nativeCanvas.drawText(
                     data[i].label,

@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">myFit</string>
+    <string name="app_name">Gymnota</string>
 
     <string name="tab_home">Check-in</string>
     <string name="tab_history">Verlauf</string>
@@ -60,7 +60,7 @@
     <string name="category_cardio">Ausdauer</string>
     <string name="confirm_delete">Löschen bestätigen</string>
 
-    <string name="about_version_format">myFit %1$s</string>
+    <string name="about_version_format">Gymnota %1$s</string>
     <string name="about_credit">Designed &amp; Built by enersto and Gemini</string>
 
     <string name="category_core">Rumpf/Core</string>

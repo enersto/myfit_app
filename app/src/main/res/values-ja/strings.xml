@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">myFit</string>
+    <string name="app_name">トレノート</string>
 
     <string name="tab_home">記録</string>
     <string name="tab_history">履歴</string>
@@ -60,7 +60,7 @@
     <string name="category_cardio">有酸素</string>
     <string name="confirm_delete">削除確認</string>
 
-    <string name="about_version_format">myFit %1$s</string>
+    <string name="about_version_format">トレノート %1$s</string>
     <string name="about_credit">Designed &amp; Built by enersto and Gemini</string>
 
     <string name="category_core">体幹</string>

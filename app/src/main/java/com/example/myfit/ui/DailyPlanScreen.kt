@@ -215,9 +215,29 @@ fun AdvancedTaskItem(
                     }
                 }
                 Spacer(modifier = Modifier.width(12.dp))
+// [修复 Bug 1]：点击打卡时，自动填充有氧/核心的目标值
                 PillCheckButton(isCompleted = isCompleted, color = themeColor, onClick = {
                     val newState = !task.isCompleted
-                    viewModel.updateTask(task.copy(isCompleted = newState))
+                    var updatedTask = task.copy(isCompleted = newState)
+
+                    // 如果是标记为完成，且是有氧或核心，且数据为空，则自动填入目标值
+                    if (newState && (task.category == "CARDIO" || task.category == "CORE")) {
+                        val filledSets = task.sets.map { set ->
+                            if (set.weightOrDuration.isBlank()) {
+                                // 将目标字符串（如 "30 min"）去除空格填入，变成 "30min"，ViewModel解析器能识别
+                                // 同时将 reps 设为 "Done" 以匹配已完成的视觉样式
+                                set.copy(
+                                    weightOrDuration = task.target.replace(" ", ""),
+                                    reps = "Done"
+                                )
+                            } else {
+                                set
+                            }
+                        }
+                        updatedTask = updatedTask.copy(sets = filledSets)
+                    }
+
+                    viewModel.updateTask(updatedTask)
                     if (newState) onComplete()
                 })
             }
