@@ -155,35 +155,11 @@ fun HistoryList(viewModel: MainViewModel) {
                         }
                     } else {
                         items(dayTasks) { task ->
-                            Card(
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(16.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column {
-                                        Text(task.name, style = MaterialTheme.typography.titleMedium)
-                                        Text(
-                                            if (task.actualWeight.isNotEmpty()) "${task.target} @ ${task.actualWeight}" else task.target,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = Color.Gray
-                                        )
-                                    }
-                                    Text(
-                                        stringResource(R.string.btn_done),
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
+                            HistoryTaskCard(task)
                         }
                     }
                 }
+                item { Spacer(modifier = Modifier.height(80.dp)) }
             }
         }
     }
@@ -207,6 +183,18 @@ fun HistoryCharts(viewModel: MainViewModel) {
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.onBackground
             )
+        }
+
+        // [新增] 在最上方插入热力图
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                // 调用刚刚写的组件
+                PixelBodyHeatmap(viewModel = viewModel, modifier = Modifier.padding(16.dp))
+            }
         }
 
 // 4) --- 模块 1: 身体状态 (合并 体重 + BMI + BMR) ---
@@ -307,5 +295,101 @@ fun HistoryCharts(viewModel: MainViewModel) {
         }
 
         item { Spacer(modifier = Modifier.height(50.dp)) }
+    }
+}
+
+// [新增/替换] 支持单边数据展示的卡片组件
+@Composable
+fun HistoryTaskCard(task: WorkoutTask) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // 1. 标题行
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // 如果是单边动作，显示 "单边" 标签
+                    if (task.isUnilateral) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.tertiaryContainer,
+                            shape = RoundedCornerShape(4.dp),
+                            modifier = Modifier.padding(end = 8.dp)
+                        ) {
+                            Text(
+                                stringResource(R.string.tag_uni),
+                                fontSize = 10.sp,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        }
+                    }
+                    Text(
+                        text = task.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Text(
+                    stringResource(R.string.btn_done),
+                    color = MaterialTheme.colorScheme.primary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // 2. 数据行
+            if (task.sets.isNotEmpty()) {
+                if (task.isUnilateral) {
+                    // [核心] 单边动作：分左右两列显示
+                    task.sets.forEachIndexed { index, set ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("#${index + 1}", color = Color.Gray, fontWeight = FontWeight.Bold, modifier = Modifier.width(30.dp), fontSize = 12.sp)
+
+                            // 左边
+                            Row(modifier = Modifier.weight(1f)) {
+                                Text(stringResource(R.string.label_side_l), fontSize = 12.sp, color = Color.Gray) // L:
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("${set.weightOrDuration} x ${set.reps}", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            }
+
+                            // 右边
+                            Row(modifier = Modifier.weight(1f)) {
+                                Text(stringResource(R.string.label_side_r), fontSize = 12.sp, color = Color.Gray) // R:
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("${set.rightWeight ?: "-"} x ${set.rightReps ?: "-"}", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            }
+                        }
+                        if (index < task.sets.size - 1) {
+                            HorizontalDivider(color = Color.LightGray.copy(alpha = 0.2f), modifier = Modifier.padding(vertical = 2.dp))
+                        }
+                    }
+                } else {
+                    // 普通动作：合并显示
+                    val isStrength = task.category == "STRENGTH"
+                    if (isStrength) {
+                        val setsStr = task.sets.joinToString("  |  ") { set -> "${set.weightOrDuration} x ${set.reps}" }
+                        Text(text = setsStr, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        task.sets.forEach { set -> Text("✅ ${set.weightOrDuration}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    }
+                }
+            } else {
+                Text(if (task.actualWeight.isNotEmpty()) "${task.target} @ ${task.actualWeight}" else task.target, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            }
+        }
     }
 }

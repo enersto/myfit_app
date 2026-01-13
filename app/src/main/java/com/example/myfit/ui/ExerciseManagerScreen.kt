@@ -52,7 +52,6 @@ fun ExerciseManagerScreen(viewModel: MainViewModel, navController: NavController
 
     Scaffold(
         topBar = {
-            // 顶部只保留标题和返回按钮
             Column(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
                 Row(
                     modifier = Modifier
@@ -61,7 +60,6 @@ fun ExerciseManagerScreen(viewModel: MainViewModel, navController: NavController
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        // [Fix] Use AutoMirrored icon
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                     Spacer(modifier = Modifier.width(8.dp))
@@ -73,7 +71,6 @@ fun ExerciseManagerScreen(viewModel: MainViewModel, navController: NavController
             }
         },
         bottomBar = {
-            // 🔴 移至底部：类别 Tab
             TabRow(
                 selectedTabIndex = categories.indexOf(selectedCategory),
                 containerColor = MaterialTheme.colorScheme.surface,
@@ -142,7 +139,6 @@ fun ExerciseManagerScreen(viewModel: MainViewModel, navController: NavController
                     }
                 }
             }
-            // 底部无需太大留白，因为有 bottomBar 撑着，但为了 FAB 还是留一点
             item { Spacer(modifier = Modifier.height(24.dp)) }
         }
     }
@@ -208,7 +204,6 @@ fun ExpandableBodyPartSection(
 
             AnimatedVisibility(visible = expanded) {
                 Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
-                    // [Fix] Divider -> HorizontalDivider
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     Spacer(modifier = Modifier.height(8.dp))
 
@@ -261,8 +256,24 @@ fun ExerciseMinimalCard(template: ExerciseTemplate, onEdit: () -> Unit, onDelete
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = template.name, style = MaterialTheme.typography.bodyLarge)
-                if (template.defaultTarget.isNotEmpty()) {
-                    Text(text = template.defaultTarget, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (template.isUnilateral) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.tertiaryContainer,
+                            shape = RoundedCornerShape(4.dp),
+                            modifier = Modifier.padding(end = 6.dp)
+                        ) {
+                            Text(
+                                stringResource(R.string.tag_uni),
+                                fontSize = 10.sp,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        }
+                    }
+                    if (template.defaultTarget.isNotEmpty()) {
+                        Text(text = template.defaultTarget, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    }
                 }
             }
             IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
@@ -280,6 +291,7 @@ fun ExerciseEditDialog(template: ExerciseTemplate?, onDismiss: () -> Unit, onSav
     var category by remember { mutableStateOf(template?.category ?: "STRENGTH") }
     var bodyPart by remember { mutableStateOf(template?.bodyPart ?: "part_chest") }
     var equipment by remember { mutableStateOf(template?.equipment ?: "equip_barbell") }
+    var isUnilateral by remember { mutableStateOf(template?.isUnilateral ?: false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -314,6 +326,22 @@ fun ExerciseEditDialog(template: ExerciseTemplate?, onDismiss: () -> Unit, onSav
                     }
                 }
 
+                // [新增] 单边动作选项 (仅力量动作显示)
+                if (category == "STRENGTH") {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { isUnilateral = !isUnilateral }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(checked = isUnilateral, onCheckedChange = { isUnilateral = it })
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(stringResource(R.string.label_is_unilateral), style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(stringResource(R.string.label_body_part), style = MaterialTheme.typography.bodyMedium)
                 ResourceDropdown(
@@ -340,7 +368,8 @@ fun ExerciseEditDialog(template: ExerciseTemplate?, onDismiss: () -> Unit, onSav
                         defaultTarget = target,
                         category = category,
                         bodyPart = bodyPart,
-                        equipment = equipment
+                        equipment = equipment,
+                        isUnilateral = isUnilateral // [新增]
                     )
                 )
             }) { Text(stringResource(R.string.btn_save)) }
@@ -365,7 +394,6 @@ fun ResourceDropdown(currentKey: String, options: List<String>, onSelect: (Strin
     val currentResId = getBodyPartResId(currentKey).takeIf { it != 0 } ?: getEquipmentResId(currentKey)
     val displayText = if (currentResId != 0) stringResource(currentResId) else currentKey
 
-    // [Fix] Correct usage of ExposedDropdownMenuBox to avoid 'menuAnchor' errors
     ExposedDropdownMenuBox(
         expanded = expanded,
         onExpandedChange = { expanded = !expanded }
@@ -375,7 +403,6 @@ fun ResourceDropdown(currentKey: String, options: List<String>, onSelect: (Strin
             onValueChange = {},
             readOnly = true,
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            // [Fix] Correct anchor modifier usage
             modifier = Modifier.menuAnchor().fillMaxWidth(),
             textStyle = MaterialTheme.typography.bodySmall
         )

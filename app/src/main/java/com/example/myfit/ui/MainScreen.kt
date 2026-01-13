@@ -25,6 +25,9 @@ import androidx.navigation.compose.rememberNavController
 import com.example.myfit.R
 import com.example.myfit.viewmodel.MainViewModel
 
+import androidx.compose.ui.platform.LocalView // [新增]
+import android.view.HapticFeedbackConstants // [新增]
+
 sealed class Screen(val route: String, val titleResId: Int, val icon: ImageVector) {
     object DailyPlan : Screen("daily_plan", R.string.tab_home, Icons.Default.CalendarToday)
     object History : Screen("history", R.string.tab_history, Icons.Default.History)
@@ -36,8 +39,8 @@ fun MainScreen(viewModel: MainViewModel) {
     val navController = rememberNavController()
     val screens = listOf(Screen.DailyPlan, Screen.History, Screen.Settings)
 
-    // [新增] 获取震动反馈句柄
-    val haptic = LocalHapticFeedback.current
+// [修改] 不再使用 Compose 的 LocalHapticFeedback，改用原生 View
+    val view = LocalView.current
 
     Scaffold(
         bottomBar = {
@@ -50,8 +53,9 @@ fun MainScreen(viewModel: MainViewModel) {
                         label = { Text(stringResource(screen.titleResId)) },
                         selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
                         onClick = {
-                            // [新增] 点击 Tab 时触发震动
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            // [修复] 使用原生 View 的 VIRTUAL_KEY 震动
+                            // 这种震动是短促的“哒”声，系统不会轻易屏蔽，且符合按钮点击的触感
+                            view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
 
                             navController.navigate(screen.route) {
                                 popUpTo(navController.graph.findStartDestination().id) {

@@ -1,5 +1,3 @@
-// ChartComponents.kt (请完全覆盖此文件或修改对应函数)
-
 package com.example.myfit.ui
 
 import androidx.compose.foundation.Canvas
@@ -44,20 +42,18 @@ fun ChartSection(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // [修复 Bug 3]：标题布局优化，使用 weight(1f) 允许长标题自动换行，防止挤压按钮
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically // 垂直居中，或者 Top
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f).padding(end = 8.dp) // 占据剩余空间
+                    modifier = Modifier.weight(1f).padding(end = 8.dp)
                 )
 
-                // 按钮组保持紧凑
                 Row(
                     modifier = Modifier
                         .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
@@ -107,41 +103,64 @@ fun SingleExerciseSection(
     mode: Int
 ) {
     var selectedExercise by remember { mutableStateOf("") }
+    // 0=左/默认, 1=右
+    var selectedSide by remember { mutableStateOf(0) }
+
     val exercises by viewModel.getExerciseNamesByCategory(category).collectAsStateWithLifecycle(initialValue = emptyList())
-    var expanded by remember { mutableStateOf(false) } // 控制下拉菜单
+
+    // [关键恢复] 获取历史记录以判断属性
+    val history by viewModel.historyRecords.collectAsStateWithLifecycle(initialValue = emptyList())
+
+    // [逻辑] 判断当前选中的动作是否为单边动作
+    // 只要历史记录里有一条该名称的记录标记为 isUnilateral=true，就视为单边动作
+    val isUnilateral by remember(selectedExercise, history) {
+        derivedStateOf {
+            if (selectedExercise.isEmpty()) false
+            else history.any { it.name == selectedExercise && it.isUnilateral }
+        }
+    }
+
+    var expanded by remember { mutableStateOf(false) }
 
     if (exercises.isNotEmpty()) {
         if (selectedExercise.isEmpty()) selectedExercise = exercises.first()
 
         Column {
-            // [修复 Bug 2]：将原来的 LazyRow FilterChip 改为 DropdownMenu 下拉选择
+            // 1. 下拉选择器
             Box(modifier = Modifier.wrapContentSize(Alignment.TopStart)) {
-                // 触发按钮 (显示当前选中项 + 下拉箭头)
                 OutlinedButton(
                     onClick = { expanded = true },
-                    modifier = Modifier.fillMaxWidth(), // 或者 wrapContentWidth
+                    modifier = Modifier.fillMaxWidth(),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
                 ) {
                     Text(selectedExercise, style = MaterialTheme.typography.bodyMedium)
                     Spacer(modifier = Modifier.weight(1f))
-                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Select Exercise")
+                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Select")
                 }
 
-                // 下拉菜单内容
                 DropdownMenu(
                     expanded = expanded,
                     onDismissRequest = { expanded = false },
-                    modifier = Modifier.heightIn(max = 300.dp) // 限制高度，支持滚动
+                    modifier = Modifier.heightIn(max = 300.dp)
                 ) {
                     exercises.forEach { name ->
+                        val isSelected = (name == selectedExercise)
+                        val textColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+
                         DropdownMenuItem(
-                            text = { Text(name) },
+                            text = {
+                                Text(
+                                    text = name,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            },
                             onClick = {
                                 selectedExercise = name
                                 expanded = false
+                                selectedSide = 0 // 切换动作时重置为左边
                             },
                             colors = MenuDefaults.itemColors(
-                                textColor = if (name == selectedExercise) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                textColor = textColor
                             )
                         )
                     }
@@ -150,16 +169,37 @@ fun SingleExerciseSection(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // 图表区域保持不变
+            // 2. 左右切换开关 (恢复判断逻辑：仅当 category 为 STRENGTH 且 isUnilateral 为 true 时显示)
+            if (category == "STRENGTH" && isUnilateral) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+                    FilterChip(
+                        selected = selectedSide == 0,
+                        onClick = { selectedSide = 0 },
+                        label = { Text(stringResource(R.string.label_side_left)) },
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+                    FilterChip(
+                        selected = selectedSide == 1,
+                        onClick = { selectedSide = 1 },
+                        label = { Text(stringResource(R.string.label_side_right)) }
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            // 3. 计算 Mode (如果选了右边，请求 mode=3)
+            // 如果按钮被隐藏（非单边），selectedSide 默认为 0，所以这里会自动请求左边数据，符合逻辑
+            val effectiveMode = if (mode == 1 && selectedSide == 1) 3 else mode
+
+            // 4. 图表渲染
             ChartSection(title = title) { granularity ->
-                val data by viewModel.getSingleExerciseChartData(selectedExercise, mode, granularity).collectAsStateWithLifecycle(initialValue = emptyList())
+                val data by viewModel.getSingleExerciseChartData(selectedExercise, effectiveMode, granularity).collectAsStateWithLifecycle(initialValue = emptyList())
                 LineChart(data = data)
             }
         }
     }
 }
 
-// ... LineChart 和 BarChart 代码保持不变 (之前版本已提供) ...
 @Composable
 fun LineChart(
     data: List<ChartDataPoint>,
@@ -174,9 +214,9 @@ fun LineChart(
     }
 
     val yValues = data.map { it.value }
-    val maxVal = (yValues.maxOrNull() ?: 100f) * 1.2f
-    val minVal = (yValues.minOrNull() ?: 0f) * 0.8f
-    val yRange = if (maxVal - minVal == 0f) 1f else maxVal - minVal
+    val maxVal = (yValues.maxOrNull() ?: 100f).let { if (it == 0f) 100f else it } * 1.2f
+    val minVal = 0f
+    val yRange = maxVal - minVal
 
     val textPaint = android.graphics.Paint().apply {
         color = android.graphics.Color.GRAY
@@ -220,7 +260,9 @@ fun LineChart(
             drawCircle(color = Color.White, radius = 10f, center = Offset(x, y))
             drawCircle(color = lineColor, radius = 7f, center = Offset(x, y))
 
-            if (data.size < 15 || i == 0 || i == data.lastIndex || data[i].value == yValues.maxOrNull()) {
+            val showValue = data.size < 15 || i == 0 || i == data.lastIndex || data[i].value == (yValues.maxOrNull() ?: 0f)
+
+            if (showValue && data[i].value > 0) {
                 drawContext.canvas.nativeCanvas.drawText(
                     String.format("%.1f", data[i].value),
                     x,
@@ -254,7 +296,7 @@ fun BarChart(
         return
     }
 
-    val maxVal = (data.maxOfOrNull { it.value } ?: 100f) * 1.2f
+    val maxVal = (data.maxOfOrNull { it.value } ?: 100f).let { if (it == 0f) 100f else it } * 1.2f
 
     val textPaint = android.graphics.Paint().apply {
         color = android.graphics.Color.GRAY
@@ -303,6 +345,108 @@ fun BarChart(
                     textPaint
                 )
             }
+        }
+    }
+}
+
+// [新增] 像素人热力图组件
+@Composable
+fun PixelBodyHeatmap(
+    viewModel: MainViewModel,
+    modifier: Modifier = Modifier
+) {
+    val heatMap by viewModel.muscleHeatMapData.collectAsStateWithLifecycle(initialValue = emptyMap())
+
+    // 颜色插值器：从 灰色(无训练) -> 绿色(低强度) -> 红色(高强度)
+    fun getColorForIntensity(intensity: Float): Color {
+        return when {
+            intensity <= 0f -> Color.LightGray.copy(alpha = 0.3f)
+            intensity < 0.5f -> Color(0xFF81C784) // Light Green
+            intensity < 0.8f -> Color(0xFFFFB74D) // Orange
+            else -> Color(0xFFE57373) // Red
+        }
+    }
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = stringResource(R.string.chart_title_heatmap), // 需要在 strings.xml 添加
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Canvas(modifier = Modifier.width(120.dp).height(200.dp)) {
+            val blockSize = size.width / 5 // 将宽度分为 5 列
+            val gap = 4f // 方块间距
+
+            // 定义绘制单个方块的辅助函数
+            fun drawBlock(col: Int, row: Int, partKey: String) {
+                val intensity = heatMap[partKey] ?: 0f
+                val color = getColorForIntensity(intensity)
+
+                drawRoundRect(
+                    color = color,
+                    topLeft = Offset(col * blockSize + gap / 2, row * blockSize + gap / 2),
+                    size = Size(blockSize - gap, blockSize - gap),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(8f, 8f)
+                )
+            }
+
+            // --- 绘制像素人 (5x8 网格) ---
+            // 坐标: (列, 行) -> (0..4, 0..7)
+
+            // Row 0: Head (装饰用，不绑定数据)
+            drawBlock(2, 0, "decoration_head")
+
+            // Row 1: Shoulders & Chest
+            drawBlock(1, 1, "part_shoulders") // L.Shoulder
+            drawBlock(2, 1, "part_chest")     // Chest
+            drawBlock(3, 1, "part_shoulders") // R.Shoulder
+
+            // Row 2: Arms & Back
+            drawBlock(0, 2, "part_arms")      // L.Arm (Upper)
+            drawBlock(2, 2, "part_back")      // Back (Center)
+            drawBlock(4, 2, "part_arms")      // R.Arm (Upper)
+
+            // Row 3: Arms (Lower) & Abs
+            drawBlock(0, 3, "part_arms")      // L.Arm (Lower)
+            drawBlock(2, 3, "part_abs")       // Abs
+            drawBlock(4, 3, "part_arms")      // R.Arm (Lower)
+
+            // Row 4: Hips (装饰 或 Core)
+            drawBlock(1, 4, "part_legs")      // Hips L
+            drawBlock(2, 4, "part_legs")      // Hips C
+            drawBlock(3, 4, "part_legs")      // Hips R
+
+            // Row 5: Thighs
+            drawBlock(1, 5, "part_legs")      // L.Thigh
+            drawBlock(3, 5, "part_legs")      // R.Thigh
+
+            // Row 6: Knees
+            drawBlock(1, 6, "part_legs")      // L.Knee
+            drawBlock(3, 6, "part_legs")      // R.Knee
+
+            // Row 7: Calves
+            drawBlock(1, 7, "part_legs")      // L.Calf
+            drawBlock(3, 7, "part_legs")      // R.Calf
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // 图例 (Legend)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(12.dp).background(Color.LightGray.copy(alpha = 0.3f), RoundedCornerShape(2.dp)))
+            Text(" 0 ", fontSize = 10.sp, color = Color.Gray)
+            Spacer(modifier = Modifier.width(8.dp))
+            Box(Modifier.size(12.dp).background(Color(0xFF81C784), RoundedCornerShape(2.dp)))
+            Text(" <50% ", fontSize = 10.sp, color = Color.Gray)
+            Spacer(modifier = Modifier.width(8.dp))
+            Box(Modifier.size(12.dp).background(Color(0xFFE57373), RoundedCornerShape(2.dp)))
+            Text(" Max ", fontSize = 10.sp, color = Color.Gray)
         }
     }
 }

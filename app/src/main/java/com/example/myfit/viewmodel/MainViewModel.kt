@@ -40,12 +40,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _selectedDate = MutableStateFlow(LocalDate.now())
     val selectedDate: StateFlow<LocalDate> = _selectedDate.asStateFlow()
 
-    // --- User Profile ---
     val userProfile = dao.getAppSettings()
         .map { it ?: AppSetting(themeId = 1) }
         .stateIn(viewModelScope, SharingStarted.Lazily, AppSetting(themeId = 1))
 
-    // --- Theme & Language ---
     val currentTheme = userProfile
         .map { AppTheme.fromId(it.themeId) }
         .stateIn(viewModelScope, SharingStarted.Lazily, AppTheme.GREEN)
@@ -54,7 +52,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .map { it.languageCode }
         .stateIn(viewModelScope, SharingStarted.Lazily, "zh")
 
-    // --- Schedule ---
     val allSchedules: Flow<List<ScheduleConfig>> = dao.getAllSchedules()
 
     private val _todayScheduleType = MutableStateFlow(DayType.CORE)
@@ -65,12 +62,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         type
     }.stateIn(viewModelScope, SharingStarted.Lazily, DayType.CORE)
 
-    // --- Weight Alert ---
     val showWeightAlert = dao.getLatestWeight().map { record ->
         if (record == null) true else ChronoUnit.DAYS.between(LocalDate.parse(record.date), LocalDate.now()) > 7
     }.stateIn(viewModelScope, SharingStarted.Lazily, false)
 
-    // --- Data Flows ---
     val todayTasks: Flow<List<WorkoutTask>> = _selectedDate.flatMapLatest { date ->
         dao.getTasksForDate(date.toString())
     }
@@ -79,17 +74,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val historyRecords: Flow<List<WorkoutTask>> = dao.getAllHistoryTasks()
     val weightHistory: Flow<List<WeightRecord>> = dao.getAllWeightRecords()
 
-    // --- Lock Screen Guide State ---
     private val prefs = application.getSharedPreferences("myfit_prefs", Context.MODE_PRIVATE)
     private val _hasShownLockScreenGuide = MutableStateFlow(prefs.getBoolean("key_lockscreen_guide_shown", false))
     val hasShownLockScreenGuide = _hasShownLockScreenGuide.asStateFlow()
+
+    // [新增] 获取肌肉热力图数据
+    // 返回 Map<部位Key, 热度(0.0~1.0)>
+    val muscleHeatMapData: Flow<Map<String, Float>> = historyRecords.map { tasks ->
+        // 1. 扁平化所有 Set，统计每个部位的总组数 (作为热度依据)
+        val partCounts = mutableMapOf<String, Int>()
+
+        tasks.forEach { task ->
+            // 如果是 Cardio，可能 1 个 Task 算 1 个 "强度单位"，或者按时长算
+            // 这里简单起见，按 Sets 数量统计
+            val count = if (task.sets.isNotEmpty()) task.sets.size else 1
+            partCounts[task.bodyPart] = partCounts.getOrDefault(task.bodyPart, 0) + count
+        }
+
+        // 2. 找出最大值，进行归一化
+        val maxCount = partCounts.values.maxOrNull() ?: 1
+
+        // 3. 转换为 0.0 ~ 1.0 的浮点数
+        partCounts.mapValues { (_, count) ->
+            count.toFloat() / maxCount.toFloat()
+        }
+    }
 
     fun markLockScreenGuideShown() {
         prefs.edit().putBoolean("key_lockscreen_guide_shown", true).apply()
         _hasShownLockScreenGuide.value = true
     }
 
-    // --- Timer State ---
     data class TimerState(
         val taskId: Long = -1L,
         val setIndex: Int = -1,
@@ -108,7 +123,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         NotificationHelper.createNotificationChannel(application)
     }
 
-    // --- Timer Logic ---
     fun startTimer(context: Context, taskId: Long, setIndex: Int, durationMinutes: Int) {
         val current = _timerState.value
         val now = System.currentTimeMillis()
@@ -198,6 +212,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val task = dao.getTaskById(taskId) ?: return
         val newSets = task.sets.toMutableList()
         if (setIndex < newSets.size) {
+            // [修复] 使用 copy 更新，保持其他字段不变
             newSets[setIndex] = newSets[setIndex].copy(
                 weightOrDuration = "${durationMinutes}min",
                 reps = "Done"
@@ -222,7 +237,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // --- Chart Data Logic ---
     private fun calculateBMI(weight: Float, heightCm: Float): Float {
         if (heightCm <= 0) return 0f
         val heightM = heightCm / 100f
@@ -269,8 +283,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }.sortedBy { it.date }
     }
 
-    // --- Actions ---
-
     fun switchTheme(theme: AppTheme) = viewModelScope.launch {
         val currentSettings = userProfile.value
         dao.saveAppSettings(currentSettings.copy(themeId = theme.id))
@@ -316,7 +328,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             target = t.defaultTarget,
             bodyPart = t.bodyPart,
             equipment = t.equipment,
-            sets = listOf(WorkoutSet(1, "", ""))
+            isUnilateral = t.isUnilateral,
+            // [修复] 显式指定参数名，消除歧义
+            sets = listOf(WorkoutSet(setNumber = 1, weightOrDuration = "", reps = ""))
         ))
     }
 
@@ -336,7 +350,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 target = item.target,
                 bodyPart = item.bodyPart,
                 equipment = item.equipment,
-                sets = listOf(WorkoutSet(1, "", ""))
+                isUnilateral = item.isUnilateral,
+                // [修复] 显式指定参数名
+                sets = listOf(WorkoutSet(setNumber = 1, weightOrDuration = "", reps = ""))
             ))
         }
     }
@@ -349,7 +365,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             target = template.defaultTarget,
             category = template.category,
             bodyPart = template.bodyPart,
-            equipment = template.equipment
+            equipment = template.equipment,
+            isUnilateral = template.isUnilateral
         ))
     }
 
@@ -369,12 +386,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val tasks = dao.getHistoryRecordsSync()
                 val sb = StringBuilder()
-                sb.append("Date,Name,Category,Target,ActualWeight,Sets\n")
+                sb.append("Date,Name,Category,Target,IsUnilateral,ActualWeight,Sets\n")
 
                 tasks.forEach { t ->
                     val safeName = t.name.replace(",", " ")
-                    val setsStr = t.sets.joinToString(" | ") { "${it.weightOrDuration} x ${it.reps}" }
-                    sb.append("${t.date},$safeName,${t.category},${t.target},${t.actualWeight},$setsStr\n")
+                    val setsStr = t.sets.joinToString(" | ") { set ->
+                        if (t.isUnilateral) {
+                            val left = "${set.weightOrDuration} x ${set.reps}"
+                            val right = "${set.rightWeight ?: ""} x ${set.rightReps ?: ""}"
+                            "L: $left / R: $right"
+                        } else {
+                            "${set.weightOrDuration} x ${set.reps}"
+                        }
+                    }
+                    sb.append("${t.date},$safeName,${t.category},${t.target},${t.isUnilateral},${t.actualWeight},$setsStr\n")
                 }
 
                 context.contentResolver.openOutputStream(uri)?.use { output ->
@@ -396,15 +421,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun backupDatabase(uri: Uri, context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // 1. 强制 WAL checkpoint
                 if (database.isOpen) {
                     val db = database.openHelper.writableDatabase
                     db.query("PRAGMA wal_checkpoint(TRUNCATE)").use { it.moveToFirst() }
-                    // ✅ 确保 checkpoint 完成
                     db.query("PRAGMA wal_checkpoint(FULL)").use { it.moveToFirst() }
                 }
-
-                // ✅ 2. 增加等待时间
                 delay(1000)
 
                 val dbName = "myfit_v7.db"
@@ -414,7 +435,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     context.contentResolver.openOutputStream(uri)?.use { output ->
                         FileInputStream(dbPath).use { input ->
                             input.copyTo(output)
-                            // ✅ 强制刷新输出流
                             output.flush()
                         }
                     }
@@ -441,35 +461,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // 🔴 [核心修复] 彻底解决恢复数据不全的问题
     fun restoreDatabase(uri: Uri, context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val dbName = "myfit_v7.db"
                 val dbPath = context.getDatabasePath(dbName)
 
-                // 1. 关闭数据库连接
                 if (database.isOpen) database.close()
 
-                // 2. 覆盖主数据库文件
                 context.contentResolver.openInputStream(uri)?.use { input ->
                     FileOutputStream(dbPath).use { output ->
                         input.copyTo(output)
-                        // ✅ 强制刷新到磁盘
                         output.fd.sync()
                     }
                 }
 
-                // 3. 删除旧的 WAL/SHM 文件
                 val walFile = File(dbPath.path + "-wal")
                 val shmFile = File(dbPath.path + "-shm")
                 if (walFile.exists()) walFile.delete()
                 if (shmFile.exists()) shmFile.delete()
 
-                // ✅ 4. 等待文件系统完成所有写入操作
-                delay(1000)  // 增加到 1 秒确保安全
+                delay(1000)
 
-                // ✅ 5. 验证文件完整性（可选但推荐）
                 if (!dbPath.exists() || dbPath.length() < 1024) {
                     throw Exception("Database file is incomplete after restore")
                 }
@@ -480,8 +493,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         context.getString(R.string.msg_restore_success),
                         Toast.LENGTH_SHORT
                     ).show()
-
-                    // 6. 最后才重启
                     triggerRestart(context)
                 }
             } catch (e: Exception) {
@@ -533,15 +544,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // [局部替换] 支持 "mode=3" 获取右侧重量数据
     fun getSingleExerciseChartData(name: String, mode: Int, granularity: ChartGranularity): Flow<List<ChartDataPoint>> {
         return historyRecords.map { tasks ->
             val targetTasks = tasks.filter { it.name == name }
             val raw = targetTasks.groupBy { LocalDate.parse(it.date) }.map { (date, tList) ->
-                val values = tList.flatMap { t -> if (t.sets.isNotEmpty()) t.sets else listOf(WorkoutSet(1, t.actualWeight.ifEmpty { t.target }, t.target)) }
+                val values = tList.flatMap { t ->
+                    if (t.sets.isNotEmpty()) t.sets
+                    else listOf(WorkoutSet(setNumber = 1, weightOrDuration = t.actualWeight.ifEmpty { t.target }, reps = t.target))
+                }
+
                 val dailyVal = when(mode) {
-                    0 -> values.sumOf { parseDuration(it.weightOrDuration).toDouble() }.toFloat()
-                    1 -> values.maxOfOrNull { parseValue(it.weightOrDuration) } ?: 0f
-                    2 -> values.sumOf { parseValue(it.reps).toDouble() }.toFloat()
+                    0 -> values.sumOf { parseDuration(it.weightOrDuration).toDouble() }.toFloat() // 有氧时长
+                    1 -> values.maxOfOrNull { parseValue(it.weightOrDuration) } ?: 0f // 力量：左边/双边 重量
+                    2 -> values.sumOf { parseValue(it.reps).toDouble() }.toFloat() // 核心：次数
+                    3 -> values.maxOfOrNull { parseValue(it.rightWeight ?: "0") } ?: 0f // [新增] 力量：右边 重量
                     else -> 0f
                 }
                 Pair(date, dailyVal)
@@ -565,6 +582,95 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun importWeeklyRoutine(context: Context, csv: String) {}
+    // [修复逻辑] 导入周计划：改为「按日覆盖」模式
+    // 逻辑：CSV 里有的天数，先清空旧数据再写入；CSV 里没有的天数，保持原样。
+    fun importWeeklyRoutine(context: Context, csv: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val lines = csv.split("\n")
+
+                // 临时数据结构：存储解析后的待插入项
+                data class PendingItem(
+                    val day: Int, val name: String, val category: String, val target: String,
+                    val bodyPart: String, val equipment: String, val isUni: Boolean
+                )
+
+                val pendingItems = mutableListOf<PendingItem>()
+                val daysToOverwrite = mutableSetOf<Int>() // 记录 CSV 中涉及的天数
+
+                // 1. 解析 CSV 阶段 (不操作数据库)
+                lines.forEachIndexed { index, line ->
+                    if (index == 0) return@forEachIndexed // 跳过标题
+                    if (line.isBlank()) return@forEachIndexed
+
+                    val parts = line.split(",").map { it.trim() }
+                    if (parts.size >= 4) {
+                        val day = parts[0].toIntOrNull() ?: 1
+                        val name = parts[1]
+                        val category = parts[2]
+                        val target = parts[3]
+                        val bodyPart = if (parts.size > 4 && parts[4].isNotBlank()) parts[4] else "part_other"
+                        val equipment = if (parts.size > 5 && parts[5].isNotBlank()) parts[5] else "equip_other"
+                        val isUni = if (parts.size > 6) parts[6].toBoolean() else false
+
+                        daysToOverwrite.add(day) // 标记这一天需要被覆盖
+                        pendingItems.add(PendingItem(day, name, category, target, bodyPart, equipment, isUni))
+                    }
+                }
+
+                if (pendingItems.isEmpty()) {
+                    throw Exception("CSV is empty or invalid")
+                }
+
+                // 2. 清理旧数据阶段 (仅清理 CSV 中涉及的天数)
+                daysToOverwrite.forEach { day ->
+                    val oldItems = dao.getRoutineForDaySync(day)
+                    oldItems.forEach { dao.deleteRoutineItem(it) }
+                }
+
+                // 3. 写入新数据阶段
+                var successCount = 0
+                pendingItems.forEach { item ->
+                    // 查找或创建动作模板
+                    var template = dao.getTemplateByName(item.name)
+                    val templateId = if (template == null) {
+                        val newTemp = ExerciseTemplate(
+                            name = item.name,
+                            category = item.category,
+                            defaultTarget = item.target,
+                            bodyPart = item.bodyPart,
+                            equipment = item.equipment,
+                            isUnilateral = item.isUni
+                        )
+                        dao.insertTemplate(newTemp)
+                    } else {
+                        template.id
+                    }
+
+                    // 插入到周计划
+                    dao.insertRoutineItem(WeeklyRoutineItem(
+                        dayOfWeek = item.day,
+                        templateId = templateId,
+                        name = item.name,
+                        target = item.target,
+                        category = item.category,
+                        bodyPart = item.bodyPart,
+                        equipment = item.equipment,
+                        isUnilateral = item.isUni
+                    ))
+                    successCount++
+                }
+
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, context.getString(R.string.import_success) + ": $successCount", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, context.getString(R.string.import_error) + "\n${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
     suspend fun optimizeExerciseLibrary(): Int = 0
 }

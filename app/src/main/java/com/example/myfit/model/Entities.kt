@@ -5,10 +5,13 @@ import androidx.room.PrimaryKey
 import com.example.myfit.R
 
 // V5.0 新增：组别详情
+// V5.3 更新：增加右侧数据支持
 data class WorkoutSet(
     val setNumber: Int,
-    val weightOrDuration: String, // 重量 或 时长
-    val reps: String              // 次数
+    val weightOrDuration: String, // 默认为左边重量，或双边总重/时长
+    val reps: String,             // 默认为左边次数
+    val rightWeight: String? = null, // [新增] 右边重量
+    val rightReps: String? = null    // [新增] 右边次数
 )
 
 @Entity(tableName = "app_settings")
@@ -24,6 +27,7 @@ data class AppSetting(
 )
 
 // V5.0 更新：动作模板增加部位和器械
+// V5.3 更新：增加单边标记
 @Entity(tableName = "exercise_templates")
 data class ExerciseTemplate(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -32,7 +36,8 @@ data class ExerciseTemplate(
     val category: String, // "STRENGTH", "CARDIO", "CORE"
     val bodyPart: String = "", // V5.0 新增: 训练部位 (存储资源Key或自定义文本)
     val equipment: String = "", // V5.0 新增: 器械 (存储资源Key或自定义文本)
-    val isDeleted: Boolean = false
+    val isDeleted: Boolean = false,
+    val isUnilateral: Boolean = false // [新增] 是否为单边动作
 )
 
 @Entity(tableName = "schedule_config")
@@ -56,7 +61,8 @@ data class WorkoutTask(
     var sets: List<WorkoutSet> = emptyList(),
     var isCompleted: Boolean = false, // 必须是 var 才能被 toggle
     var target: String = "",          // 兼容旧 UI
-    var actualWeight: String = ""     // 兼容旧 UI
+    var actualWeight: String = "",     // 兼容旧 UI
+    val isUnilateral: Boolean = false // [新增] 继承自 Template，方便 UI 判断
 )
 
 @Entity(tableName = "weight_records")
@@ -76,7 +82,8 @@ data class WeeklyRoutineItem(
     val category: String,
     // V5.2 新增字段，提供默认值以兼容旧代码构造
     val bodyPart: String = "",
-    val equipment: String = ""
+    val equipment: String = "",
+    val isUnilateral: Boolean = false // [新增]
 )
 
 enum class DayType(val labelResId: Int, val colorHex: Long) {

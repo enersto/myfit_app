@@ -51,7 +51,6 @@ import kotlin.random.Random
 
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-// 确保已有以下 material3 的引用 (通常已有，确认即可)
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.rememberSwipeToDismissBoxState
@@ -59,7 +58,7 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 // 动画核心库
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
-// 手势处理库 (替代原生的 SwipeToDismiss)
+// 手势处理库
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -71,9 +70,6 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
-// [修复] 删除了重复的 getBodyPartResId 和 getEquipmentResId 定义
-// 它们现在直接引用 ExerciseManagerScreen.kt 中的公共定义
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DailyPlanScreen(viewModel: MainViewModel, navController: NavController) {
@@ -83,7 +79,6 @@ fun DailyPlanScreen(viewModel: MainViewModel, navController: NavController) {
     val showWeightAlert by viewModel.showWeightAlert.collectAsState()
     val timerState by viewModel.timerState.collectAsStateWithLifecycle()
 
-    // [新增] 监听是否已展示过引导
     val hasShownGuide by viewModel.hasShownLockScreenGuide.collectAsState()
 
     val progress = if (tasks.isEmpty()) 0f else tasks.count { it.isCompleted } / tasks.size.toFloat()
@@ -93,12 +88,10 @@ fun DailyPlanScreen(viewModel: MainViewModel, navController: NavController) {
     var showWeightDialog by remember { mutableStateOf(false) }
     var showExplosion by remember { mutableStateOf(false) }
 
-    // [新增] 控制锁屏引导弹窗的状态
     var showLockScreenSetupDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
 
-    // [修改] 权限回调：如果同意了通知权限，且从未展示过引导，则弹窗
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
         onResult = { isGranted ->
@@ -123,7 +116,6 @@ fun DailyPlanScreen(viewModel: MainViewModel, navController: NavController) {
                 }
             }
         ) { padding ->
-            // [注意] 这里的 padding(16.dp) 确保了与 HistoryScreen 和 ScheduleScreen 的根 padding 一致
             Column(modifier = Modifier.padding(padding).padding(16.dp)) {
 
                 HeaderSection(date, dayType, progress, themeColor, showWeightAlert) { showWeightDialog = true }
@@ -160,11 +152,9 @@ fun DailyPlanScreen(viewModel: MainViewModel, navController: NavController) {
         if (showAddSheet) AddExerciseSheet(viewModel, navController) { showAddSheet = false }
         if (showWeightDialog) WeightDialog(viewModel) { showWeightDialog = false }
 
-        // [新增] 锁屏通知引导弹窗 (完全使用资源字符串)
         if (showLockScreenSetupDialog) {
             AlertDialog(
                 onDismissRequest = {
-                    // 点击外部取消时，也视为“已读”，不再打扰
                     viewModel.markLockScreenGuideShown()
                     showLockScreenSetupDialog = false
                 },
@@ -172,7 +162,6 @@ fun DailyPlanScreen(viewModel: MainViewModel, navController: NavController) {
                 text = { Text(stringResource(R.string.dialog_lock_screen_content)) },
                 confirmButton = {
                     Button(onClick = {
-                        // 点击去设置，标记为已读
                         viewModel.markLockScreenGuideShown()
                         NotificationHelper.openNotificationSettings(context)
                         showLockScreenSetupDialog = false
@@ -182,7 +171,6 @@ fun DailyPlanScreen(viewModel: MainViewModel, navController: NavController) {
                 },
                 dismissButton = {
                     TextButton(onClick = {
-                        // 点击稍后，标记为已读（不再打扰）
                         viewModel.markLockScreenGuideShown()
                         showLockScreenSetupDialog = false
                     }) {
@@ -194,7 +182,6 @@ fun DailyPlanScreen(viewModel: MainViewModel, navController: NavController) {
     }
 }
 
-// ... AdvancedTaskItem 及后续代码保持不变 ...
 @Composable
 fun AdvancedTaskItem(
     task: WorkoutTask,
@@ -209,7 +196,6 @@ fun AdvancedTaskItem(
     val cardBgColor = if (isCompleted) Color(0xFFF0F0F0) else MaterialTheme.colorScheme.surface
     val contentAlpha = if (isCompleted) 0.5f else 1f
 
-    // 引用公共资源获取函数
     val bodyPartRes = getBodyPartResId(task.bodyPart)
     val bodyPartLabel = if (bodyPartRes != 0) stringResource(bodyPartRes) else task.bodyPart
     val equipRes = getEquipmentResId(task.equipment)
@@ -232,22 +218,30 @@ fun AdvancedTaskItem(
                         fontWeight = FontWeight.Bold,
                         textDecoration = if (isCompleted) androidx.compose.ui.text.style.TextDecoration.LineThrough else null
                     )
-                    Row(modifier = Modifier.padding(top = 4.dp)) {
+                    Row(modifier = Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (task.isUnilateral) {
+                            Surface(color = MaterialTheme.colorScheme.tertiaryContainer, shape = RoundedCornerShape(4.dp)) {
+                                Text(
+                                    stringResource(R.string.label_unilateral_mode),
+                                    fontSize = 10.sp,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
+                        }
                         Text(text = "$bodyPartLabel | $equipLabel", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                     }
                 }
                 Spacer(modifier = Modifier.width(12.dp))
-// [修复 Bug 1]：点击打卡时，自动填充有氧/核心的目标值
+
                 PillCheckButton(isCompleted = isCompleted, color = themeColor, onClick = {
                     val newState = !task.isCompleted
                     var updatedTask = task.copy(isCompleted = newState)
 
-                    // 如果是标记为完成，且是有氧或核心，且数据为空，则自动填入目标值
                     if (newState && (task.category == "CARDIO" || task.category == "CORE")) {
                         val filledSets = task.sets.map { set ->
                             if (set.weightOrDuration.isBlank()) {
-                                // 将目标字符串（如 "30 min"）去除空格填入，变成 "30min"，ViewModel解析器能识别
-                                // 同时将 reps 设为 "Done" 以匹配已完成的视觉样式
                                 set.copy(
                                     weightOrDuration = task.target.replace(" ", ""),
                                     reps = "Done"
@@ -279,11 +273,18 @@ fun AdvancedTaskItem(
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         task.sets.forEachIndexed { index, set ->
-                            SetRow(index, set, themeColor) { updatedSet ->
-                                val newSets = task.sets.toMutableList()
-                                newSets[index] = updatedSet
-                                viewModel.updateTask(task.copy(sets = newSets))
-                            }
+                            // [关键修复] 传递具名参数，消除歧义
+                            SetRow(
+                                index = index,
+                                set = set,
+                                color = themeColor,
+                                isUnilateral = task.isUnilateral,
+                                onUpdate = { updatedSet ->
+                                    val newSets = task.sets.toMutableList()
+                                    newSets[index] = updatedSet
+                                    viewModel.updateTask(task.copy(sets = newSets))
+                                }
+                            )
                             Spacer(modifier = Modifier.height(6.dp))
                         }
                     } else {
@@ -313,10 +314,13 @@ fun AdvancedTaskItem(
                     TextButton(
                         onClick = {
                             val lastSet = task.sets.lastOrNull()
+                            // [关键修复] 创建新 WorkoutSet 时使用具名参数
                             val newSet = WorkoutSet(
                                 setNumber = task.sets.size + 1,
                                 weightOrDuration = lastSet?.weightOrDuration ?: "",
-                                reps = lastSet?.reps ?: ""
+                                reps = lastSet?.reps ?: "",
+                                rightWeight = lastSet?.rightWeight,
+                                rightReps = lastSet?.rightReps
                             )
                             viewModel.updateTask(task.copy(sets = task.sets + newSet))
                         },
@@ -337,45 +341,84 @@ private fun parseDefaultDuration(target: String): String {
 }
 
 @Composable
-fun SetRow(index: Int, set: WorkoutSet, color: Color, onUpdate: (WorkoutSet) -> Unit) {
-    // [修复] 引入本地状态，解决输入时光标跳动问题
-    // 使用 derivedStateOf 或 LaunchedEffect 确保当外部 set 真的改变时（非输入导致的回环），本地状态能跟上
+fun SetRow(
+    index: Int,
+    set: WorkoutSet,
+    color: Color,
+    isUnilateral: Boolean = false,
+    onUpdate: (WorkoutSet) -> Unit
+) {
     var weightInput by remember(set.weightOrDuration) { mutableStateOf(set.weightOrDuration) }
     var repsInput by remember(set.reps) { mutableStateOf(set.reps) }
+
+    var rightWeightInput by remember(set.rightWeight) { mutableStateOf(set.rightWeight ?: "") }
+    var rightRepsInput by remember(set.rightReps) { mutableStateOf(set.rightReps ?: "") }
 
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text("${set.setNumber}", modifier = Modifier.weight(0.5f), fontWeight = FontWeight.Bold, color = Color.Gray)
 
-        Surface(modifier = Modifier.weight(1f).padding(end = 8.dp), color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(4.dp)) {
-            BasicTextField(
-                value = weightInput,
-                onValueChange = {
-                    weightInput = it
-                    // 实时更新 ViewModel，但因为本地使用了 state，UI 不会因为重组而重置光标
-                    onUpdate(set.copy(weightOrDuration = it))
-                },
-                textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp),
-                singleLine = true,
-                cursorBrush = SolidColor(color),
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
-            )
-        }
-
-        Surface(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(4.dp)) {
-            BasicTextField(
-                value = repsInput,
-                onValueChange = {
-                    repsInput = it
-                    onUpdate(set.copy(reps = it))
-                },
-                textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp),
-                singleLine = true,
-                cursorBrush = SolidColor(color),
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
-            )
+        if (isUnilateral) {
+            Column(modifier = Modifier.weight(2f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.label_side_left), fontSize = 10.sp, color = Color.Gray, modifier = Modifier.width(12.dp))
+                    InputBox(weightInput, color, Modifier.weight(1f)) {
+                        weightInput = it
+                        onUpdate(set.copy(weightOrDuration = it))
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    InputBox(repsInput, color, Modifier.weight(1f)) {
+                        repsInput = it
+                        onUpdate(set.copy(reps = it))
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.label_side_right), fontSize = 10.sp, color = Color.Gray, modifier = Modifier.width(12.dp))
+                    InputBox(rightWeightInput, color, Modifier.weight(1f)) {
+                        rightWeightInput = it
+                        onUpdate(set.copy(rightWeight = it))
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    InputBox(rightRepsInput, color, Modifier.weight(1f)) {
+                        rightRepsInput = it
+                        onUpdate(set.copy(rightReps = it))
+                    }
+                }
+            }
+        } else {
+            InputBox(weightInput, color, Modifier.weight(1f).padding(end = 8.dp)) {
+                weightInput = it
+                onUpdate(set.copy(weightOrDuration = it))
+            }
+            InputBox(repsInput, color, Modifier.weight(1f)) {
+                repsInput = it
+                onUpdate(set.copy(reps = it))
+            }
         }
     }
 }
+
+@Composable
+fun InputBox(
+    value: String,
+    color: Color,
+    modifier: Modifier = Modifier,
+    onValueChange: (String) -> Unit
+) {
+    Surface(modifier = modifier, color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(4.dp)) {
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp),
+            singleLine = true,
+            cursorBrush = SolidColor(color),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+        )
+    }
+}
+
+// ... TimerSetRow, HeaderSection, EmptyState, AddExerciseSheet, WeightDialog, PillCheckButton, SwipeToDeleteContainer, ExplosionEffect 保持不变 ...
+// 务必确保以下这些函数都存在于文件中，避免编译错误
 
 @Composable
 fun TimerSetRow(
@@ -455,7 +498,6 @@ fun TimerSetRow(
 @Composable
 fun HeaderSection(date: LocalDate, dayType: DayType, progress: Float, color: Color, showWeightAlert: Boolean, onWeightClick: () -> Unit) {
     Column {
-        // 第一行：日期 (独占一行，防止挤压)
         val dateText = remember(date) {
             date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL))
         }
@@ -465,27 +507,24 @@ fun HeaderSection(date: LocalDate, dayType: DayType, progress: Float, color: Col
             color = MaterialTheme.colorScheme.onBackground
         )
 
-        // 5) 第二行：记录按钮 (单独一行，位于日期和类型之间)
         if (showWeightAlert) {
             Spacer(modifier = Modifier.height(8.dp))
             Button(
                 onClick = onWeightClick,
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
-                modifier = Modifier.height(36.dp).align(Alignment.Start), // 左对齐
+                modifier = Modifier.height(36.dp).align(Alignment.Start),
                 contentPadding = PaddingValues(horizontal = 12.dp)
             ) {
                 Text(stringResource(R.string.log_weight), fontSize = 14.sp)
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp)) // 拉开间距
+        Spacer(modifier = Modifier.height(24.dp))
 
-        // 第三行：类型
         Text(stringResource(dayType.labelResId), color = color, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // 进度条
         LinearProgressIndicator(
             progress = { progress },
             modifier = Modifier.fillMaxWidth().height(12.dp).clip(RoundedCornerShape(6.dp)),
@@ -580,8 +619,6 @@ fun AddExerciseSheet(viewModel: MainViewModel, navController: NavController, onD
 fun WeightDialog(viewModel: MainViewModel, onDismiss: () -> Unit) {
     val profile by viewModel.userProfile.collectAsState()
 
-    // 逻辑判定：是否需要显示详细信息
-    // 规则：第一次记录(身高/年龄为0) 或者 年龄 < 22 岁时，需要确认身高年龄
     val needFullInfo = remember(profile) {
         profile.height == 0f || profile.age == 0 || profile.age < 22
     }
@@ -589,14 +626,13 @@ fun WeightDialog(viewModel: MainViewModel, onDismiss: () -> Unit) {
     var weightInput by remember { mutableStateOf("") }
     var ageInput by remember { mutableStateOf(if (profile.age > 0) profile.age.toString() else "") }
     var heightInput by remember { mutableStateOf(if (profile.height > 0) profile.height.toString() else "") }
-    var selectedGender by remember { mutableStateOf(profile.gender) } // 0 male, 1 female
+    var selectedGender by remember { mutableStateOf(profile.gender) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(if (needFullInfo) R.string.dialog_profile_title else R.string.dialog_weight_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                // 1. 体重 (必填)
                 OutlinedTextField(
                     value = weightInput,
                     onValueChange = { weightInput = it },
@@ -605,7 +641,6 @@ fun WeightDialog(viewModel: MainViewModel, onDismiss: () -> Unit) {
                     singleLine = true
                 )
 
-                // 2. 详细信息 (条件显示)
                 if (needFullInfo) {
                     HorizontalDivider()
 
@@ -613,7 +648,7 @@ fun WeightDialog(viewModel: MainViewModel, onDismiss: () -> Unit) {
                         OutlinedTextField(
                             value = ageInput,
                             onValueChange = { ageInput = it },
-                            label = { Text(stringResource(R.string.hint_input_age)) }, // "Age"
+                            label = { Text(stringResource(R.string.hint_input_age)) },
                             modifier = Modifier.weight(1f),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true
@@ -621,7 +656,7 @@ fun WeightDialog(viewModel: MainViewModel, onDismiss: () -> Unit) {
                         OutlinedTextField(
                             value = heightInput,
                             onValueChange = { heightInput = it },
-                            label = { Text(stringResource(R.string.hint_input_height)) }, // "Height"
+                            label = { Text(stringResource(R.string.hint_input_height)) },
                             modifier = Modifier.weight(1f),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true
@@ -650,7 +685,6 @@ fun WeightDialog(viewModel: MainViewModel, onDismiss: () -> Unit) {
             Button(onClick = {
                 val w = weightInput.toFloatOrNull()
                 if (w != null) {
-                    // 如果显示了详细信息，则解析并更新；否则传 null (保持原值)
                     val a = if (needFullInfo) ageInput.toIntOrNull() else null
                     val h = if (needFullInfo) heightInput.toFloatOrNull() else null
                     val g = if (needFullInfo) selectedGender else null
@@ -678,47 +712,38 @@ fun PillCheckButton(isCompleted: Boolean, color: Color, onClick: () -> Unit) {
     }
 }
 
-// [新] 自定义侧滑删除容器：支持“滑开停留”和“深滑删除”
 @Composable
 fun <T> SwipeToDeleteContainer(
     item: T,
     onDelete: (T) -> Unit,
-    content: @Composable () -> Unit // 注意：这里不需要传入 item，直接用 lambda 内容即可
+    content: @Composable () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
 
-    // 获取屏幕宽度，用于计算深滑阈值
     val configuration = LocalConfiguration.current
     val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
 
-    // X轴偏移量，控制卡片位置
     val offsetX = remember { Animatable(0f) }
 
-    // --- 阈值参数 ---
-    // 1. 悬停阈值：滑开多少像素露出菜单？(这里设为 80dp，大约是垃圾桶按钮的宽度)
     val revealThresholdPx = with(density) { 80.dp.toPx() }
-    // 2. 删除阈值：深滑多少像素直接删除？(设为屏幕宽度的 50%)
     val deleteThresholdPx = screenWidthPx * 0.5f
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(IntrinsicSize.Min) // 关键：让红底高度跟随内容高度
+            .height(IntrinsicSize.Min)
     ) {
-        // --- 底层：红底 + 垃圾桶 (操作区) ---
-        // 仅当有偏移时显示，优化性能
         if (offsetX.value < 0) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.error, RoundedCornerShape(12.dp))
                     .clickable {
-                        // [交互] 点击红底 -> 确认删除
                         onDelete(item)
                     }
-                    .padding(end = 24.dp), // 图标靠右对齐
+                    .padding(end = 24.dp),
                 contentAlignment = Alignment.CenterEnd
             ) {
                 Icon(
@@ -729,42 +754,34 @@ fun <T> SwipeToDeleteContainer(
             }
         }
 
-        // --- 上层：内容卡片 (滑动区) ---
         Box(
             modifier = Modifier
                 .offset { IntOffset(offsetX.value.roundToInt(), 0) }
                 .draggable(
                     state = rememberDraggableState { delta ->
                         scope.launch {
-                            // 限制只能向左滑 (负值)，最远滑出屏幕
                             val target = (offsetX.value + delta).coerceAtMost(0f)
                             offsetX.snapTo(target)
                         }
                     },
                     orientation = Orientation.Horizontal,
                     onDragStopped = { velocity ->
-                        // 手指松开后的吸附逻辑
                         val currentX = abs(offsetX.value)
 
                         when {
-                            // 1. 深滑模式：滑过屏幕一半 -> 触发直接删除动画
                             currentX >= deleteThresholdPx -> {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 launch {
-                                    // 动画滑出屏幕
                                     offsetX.animateTo(-screenWidthPx, tween(300))
                                     onDelete(item)
-                                    // 删除回调后重置位置 (防止列表复用时状态错乱)
                                     offsetX.snapTo(0f)
                                 }
                             }
-                            // 2. 悬停模式：滑过菜单的一半宽度 -> 吸附到菜单展开位置
                             currentX >= revealThresholdPx / 2 -> {
                                 launch {
                                     offsetX.animateTo(-revealThresholdPx, tween(300))
                                 }
                             }
-                            // 3. 恢复模式：滑动距离不够 -> 回弹关闭
                             else -> {
                                 launch {
                                     offsetX.animateTo(0f, tween(300))

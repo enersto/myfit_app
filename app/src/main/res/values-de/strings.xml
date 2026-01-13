@@ -34,8 +34,7 @@
     <string name="about">Über</string>
 
     <string name="import_dialog_title">CSV Inhalt einfügen</string>
-    <string name="import_dialog_hint">Format: Tag(1-7), Name, Kategorie, Ziel, KörperteilKey, GerätKey</string>
-    <string name="import_btn">Importieren</string>
+    <string name="import_dialog_hint">Format: Tag(1-7), Name, Kategorie, Ziel, KörperteilKey, GerätKey, Einseitig(true/false)</string>    <string name="import_btn">Importieren</string>
 
     <string name="week_1">Mo. </string>
     <string name="week_2">Di. </string>
@@ -136,8 +135,7 @@
     <string name="val_default_body_part">part_other</string>
     <string name="val_default_equipment">equip_other</string>
 
-    <string name="import_csv_template">Tag, Name, Kategorie, Ziel, KörperteilKey, GerätKey\n1, Bankdrücken, STRENGTH, 4x8, part_chest, equip_barbell\n1, Butterfly, STRENGTH, 4x12, part_chest, equip_machine\n2, Laufen, CARDIO, 30min, part_cardio, equip_cardio_machine\n3, Plank, CORE, 3x60s, part_abs, equip_bodyweight</string>
-
+    <string name="import_csv_template">Tag, Name, Kategorie, Ziel, PartKey, EquipKey, Einseitig\n1, Langhantel Bankdrücken, STRENGTH, 4x8, part_chest, equip_barbell, false\n1, Kurzhantel Seitheben, STRENGTH, 4x15, part_shoulders, equip_dumbbell, true\n2, Laufen, CARDIO, 30min, part_cardio, equip_cardio_machine, false\n3, Unterarmstütz, CORE, 3x60s, part_abs, equip_bodyweight, false</string>
     <string name="settings_help_reference">Hilfe und Referenz</string>
     <string name="help_dialog_title">CSV-Schlüsselreferenz</string>
     <string name="help_dialog_subtitle">Tippen Sie auf ein Element, um den Schlüssel in die Zwischenablage zu kopieren.</string>
@@ -189,5 +187,20 @@
     <string name="hint_input_age">Alter</string>
     <string name="hint_input_height">Größe (cm)</string>
     <string name="label_weight_kg">Gewicht (kg)</string>
+
+    <string name="label_is_unilateral">Einseitige Übung (L/R getrennt erfassen)</string>
+    <string name="label_side_left">Links</string>
+    <string name="label_side_right">Rechts</string>
+    <string name="hint_weight">KG</string>
+    <string name="hint_reps">Wdh.</string>
+
+    <string name="tag_uni">Uni</string>
+    <string name="label_unilateral_mode">Einseitiger Modus</string>
+    <string name="label_side_l">L:</string>
+    <string name="label_side_r">R:</string>
+    <string name="import_success">Import erfolgreich</string>
+    <string name="import_error">Import fehlgeschlagen, bitte Format prüfen</string>
+
+    <string name="chart_title_heatmap">Muskeltraining-Heatmap</string>
 
 </resources>
