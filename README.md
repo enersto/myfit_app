@@ -1,8 +1,8 @@
-# 健身记 Gymnota - 个人健身记录备忘录 (V5.8.1)
+# 健身记 Gymnota - 个人健身记录备忘录 (V5.8)
 
 **健身记** 是一款基于 Android Jetpack Compose 开发的个人健身追踪和备忘记录应用。它旨在帮助用户规划周度训练方案、记录每日打卡，并通过**原生图表**深度可视化追踪训练容量与身体状态变化。
 
-🚀 **V5.8.1 版本重磅更新**：新增**训练容量热力图 (Heatmap)**，直观展示历史训练频率与负荷；重构**单边动作 (Unilateral)** 数据统计逻辑；优化图表图例布局与多语言体验。
+🚀 **V5.8 版本重磅更新**：新增**训练容量热力图 (Heatmap)**，直观展示历史训练频率与负荷；重构**单边动作 (Unilateral)** 数据统计逻辑。
 ---
 
 [English Version](https://github.com/enersto/Gymnota/blob/main/READEME-en.md)
@@ -119,8 +119,8 @@
 
 ## 📝 版本信息
 
-* **Version**: 5.8.1
-* **Version Code**: 581
+* **Version**: 5.8
+* **Version Code**: 58
 * **Author**: Designed & Built by enersto & Hajimi
 
 ---
