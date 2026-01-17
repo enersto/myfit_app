@@ -29,6 +29,10 @@ interface WorkoutDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTemplate(template: ExerciseTemplate): Long
 
+    // [新增] 批量插入，用于预填充
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTemplates(templates: List<ExerciseTemplate>)
+
     @Update
     suspend fun updateTemplate(template: ExerciseTemplate)
 

@@ -25,6 +25,8 @@ import com.example.myfit.R
 import com.example.myfit.viewmodel.MainViewModel
 import java.time.LocalDate
 
+import com.example.myfit.model.LogType           // [新增]
+
 enum class ChartGranularity { DAILY, MONTHLY }
 data class ChartDataPoint(val date: LocalDate, val value: Float, val label: String)
 
@@ -100,7 +102,8 @@ fun SingleExerciseSection(
     viewModel: MainViewModel,
     category: String,
     title: String,
-    mode: Int
+    // [注意] 这里的 mode 参数保留用于兼容，但在内部逻辑中，我们会优先使用动作自身的 LogType
+    defaultMode: Int = 1
 ) {
     var selectedExercise by remember { mutableStateOf("") }
     // 0=左/默认, 1=右
@@ -119,6 +122,11 @@ fun SingleExerciseSection(
             else history.any { it.name == selectedExercise && it.isUnilateral }
         }
     }
+
+    // 2. [关键新增] 获取动作的 LogType
+    val logType by remember(selectedExercise) {
+        viewModel.getLogTypeForExercise(selectedExercise)
+    }.collectAsStateWithLifecycle(initialValue = LogType.WEIGHT_REPS.value)
 
     var expanded by remember { mutableStateOf(false) }
 
@@ -188,8 +196,15 @@ fun SingleExerciseSection(
             }
 
             // 3. 计算 Mode (如果选了右边，请求 mode=3)
-            // 如果按钮被隐藏（非单边），selectedSide 默认为 0，所以这里会自动请求左边数据，符合逻辑
-            val effectiveMode = if (mode == 1 && selectedSide == 1) 3 else mode
+            // --- 动态计算 effectiveMode ---
+            val effectiveMode = when (logType) {
+                LogType.DURATION.value -> 0   // 计时 -> 显示总时长
+                LogType.REPS_ONLY.value -> 2  // 自重 -> 显示左侧/总次数 (暂不支持右侧次数图表)
+                else -> {                     // 计重 (WEIGHT_REPS)
+                    // [关键逻辑] 如果选了右边(1)，则使用 mode 3 (右侧重量)，否则 mode 1 (左侧重量)
+                    if (selectedSide == 1) 3 else 1
+                }
+            }
 
             // 4. 图表渲染
             ChartSection(title = title) { granularity ->

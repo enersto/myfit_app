@@ -35,6 +35,9 @@ import android.media.AudioManager
 import android.media.ToneGenerator
 import android.content.SharedPreferences
 
+import com.google.gson.Gson // [新增]
+import com.google.gson.reflect.TypeToken // [新增]
+
 
 // [新增] 计时器阶段枚举
 enum class TimerPhase {
@@ -189,7 +192,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // [重构] 启动计时器入口：决定是进入准备阶段还是直接开始
-    fun startTimer(context: Context, taskId: Long, setIndex: Int, durationMinutes: Int) {
+    fun startTimer(context: Context, taskId: Long, setIndex: Int, durationMinutes: Float) {
         val prepEnabled = getTimerPrepEnabled()
         // 只有当前是空闲状态，且开启了准备时间，才进入 PREP 阶段
         if (prepEnabled && _timerState.value.phase == TimerPhase.IDLE) {
@@ -200,7 +203,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // [新增] 启动准备阶段
-    private fun startPrepPhase(context: Context, taskId: Long, setIndex: Int, durationMinutes: Int) {
+    private fun startPrepPhase(context: Context, taskId: Long, setIndex: Int, durationMinutes: Float) {
         val prepSeconds = getTimerPrepSeconds()
         val now = SystemClock.elapsedRealtime() // 【核心】使用精准时间
         val endTime = now + (prepSeconds * 1000L)
@@ -223,11 +226,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // [重构] 启动正式训练阶段 (对应原本的 startTimer 逻辑)
-    private fun startWorkPhase(context: Context, taskId: Long, setIndex: Int, durationMinutes: Int) {
+    private fun startWorkPhase(context: Context, taskId: Long, setIndex: Int, durationMinutes: Float) {
         val current = _timerState.value
         val now = SystemClock.elapsedRealtime() // 【核心】使用精准时间
 
-        val durationMillis = durationMinutes * 60 * 1000L
+        // [修改] 计算毫秒数 (支持小数分钟，例如 0.5 * 60 * 1000 = 30000)
+        val durationMillis = (durationMinutes * 60 * 1000).toLong()
 
         // 判断是否是“暂停后继续”：任务ID一致、Set一致、处于暂停状态、且之前是在WORK阶段暂停的
         val endTimeMillis = if (current.taskId == taskId && current.setIndex == setIndex && current.isPaused && current.phase == TimerPhase.WORK) {
@@ -239,7 +243,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val initialRemSeconds = ((endTimeMillis - now) / 1000).toInt()
 
         _timerState.value = TimerState(
-            taskId, setIndex, durationMinutes * 60, initialRemSeconds, endTimeMillis,
+            taskId, setIndex, (durationMinutes * 60).toInt(), initialRemSeconds, endTimeMillis,
             isRunning = true, isPaused = false, phase = TimerPhase.WORK, showBigAlert = false
         )
 
@@ -369,14 +373,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         toneGenerator.release() // 释放音频资源防止内存泄漏
     }
 
-    private suspend fun onTimerFinished(taskId: Long, setIndex: Int, durationMinutes: Int) {
+    private suspend fun onTimerFinished(taskId: Long, setIndex: Int, durationMinutes: Float) {
         _timerState.value = TimerState()
         val task = dao.getTaskById(taskId) ?: return
         val newSets = task.sets.toMutableList()
         if (setIndex < newSets.size) {
-            // [修复] 使用 copy 更新，保持其他字段不变
+            // [修改] 格式化时间字符串：如果是整数则不显示小数位 (1.0 -> 1min, 0.5 -> 0.5min)
+            val timeStr = if (durationMinutes % 1.0f == 0f) {
+                "${durationMinutes.toInt()}min"
+            } else {
+                "${durationMinutes}min"
+            }
+
             newSets[setIndex] = newSets[setIndex].copy(
-                weightOrDuration = "${durationMinutes}min",
+                weightOrDuration = timeStr,
                 reps = "Done"
             )
         }
@@ -491,6 +501,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             bodyPart = t.bodyPart,
             equipment = t.equipment,
             isUnilateral = t.isUnilateral,
+            logType = t.logType, // [新增] 传递 logType
             // [修复] 显式指定参数名，消除歧义
             sets = listOf(WorkoutSet(setNumber = 1, weightOrDuration = "", reps = ""))
         ))
@@ -513,6 +524,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 bodyPart = item.bodyPart,
                 equipment = item.equipment,
                 isUnilateral = item.isUnilateral,
+                logType = item.logType, // [新增] 传递 logType
                 // [修复] 显式指定参数名
                 sets = listOf(WorkoutSet(setNumber = 1, weightOrDuration = "", reps = ""))
             ))
@@ -528,7 +540,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             category = template.category,
             bodyPart = template.bodyPart,
             equipment = template.equipment,
-            isUnilateral = template.isUnilateral
+            isUnilateral = template.isUnilateral,
+            logType = template.logType // [新增]
         ))
     }
 
@@ -548,7 +561,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val tasks = dao.getHistoryRecordsSync()
                 val sb = StringBuilder()
-                sb.append("Date,Name,Category,Target,IsUnilateral,ActualWeight,Sets\n")
+                sb.append("Date,Name,Category,Target,IsUnilateral,LogType,ActualWeight,Sets\n")
 
                 tasks.forEach { t ->
                     val safeName = t.name.replace(",", " ")
@@ -561,7 +574,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             "${set.weightOrDuration} x ${set.reps}"
                         }
                     }
-                    sb.append("${t.date},$safeName,${t.category},${t.target},${t.isUnilateral},${t.actualWeight},$setsStr\n")
+                    sb.append("${t.date},$safeName,${t.category},${t.target},${t.isUnilateral},${t.logType},${t.actualWeight},$setsStr\n")
                 }
 
                 context.contentResolver.openOutputStream(uri)?.use { output ->
@@ -754,7 +767,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // 临时数据结构：存储解析后的待插入项
                 data class PendingItem(
                     val day: Int, val name: String, val category: String, val target: String,
-                    val bodyPart: String, val equipment: String, val isUni: Boolean
+                    val bodyPart: String, val equipment: String, val isUni: Boolean,
+                    val logType: Int
                 )
 
                 val pendingItems = mutableListOf<PendingItem>()
@@ -774,9 +788,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         val bodyPart = if (parts.size > 4 && parts[4].isNotBlank()) parts[4] else "part_other"
                         val equipment = if (parts.size > 5 && parts[5].isNotBlank()) parts[5] else "equip_other"
                         val isUni = if (parts.size > 6) parts[6].toBoolean() else false
+                        // [新增] 解析 LogType，如果 CSV 没这列(旧版)，则根据 Category 推断
+                        val inferredLogType = when(category) {
+                            "CARDIO", "CORE" -> 1 // DURATION
+                            else -> 0 // WEIGHT_REPS
+                        }
+                        val logType = if (parts.size > 7) parts[7].toIntOrNull() ?: inferredLogType else inferredLogType
 
                         daysToOverwrite.add(day) // 标记这一天需要被覆盖
-                        pendingItems.add(PendingItem(day, name, category, target, bodyPart, equipment, isUni))
+                        pendingItems.add(PendingItem(day, name, category, target, bodyPart, equipment, isUni,logType))
                     }
                 }
 
@@ -802,7 +822,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             defaultTarget = item.target,
                             bodyPart = item.bodyPart,
                             equipment = item.equipment,
-                            isUnilateral = item.isUni
+                            isUnilateral = item.isUni,
+                            logType = item.logType
                         )
                         dao.insertTemplate(newTemp)
                     } else {
@@ -818,7 +839,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         category = item.category,
                         bodyPart = item.bodyPart,
                         equipment = item.equipment,
-                        isUnilateral = item.isUni
+                        isUnilateral = item.isUni,
+                        logType = item.logType
                     ))
                     successCount++
                 }
@@ -834,5 +856,72 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
+    // [新增] 重新加载标准动作库
+    fun reloadStandardExercises(context: Context, languageCode: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // 1. 确定文件名
+                val fileName = when (languageCode) {
+                    "en" -> "exercises_en.json"
+                    "ja" -> "exercises_ja.json"
+                    "de" -> "exercises_de.json"
+                    "es" -> "exercises_es.json"
+                    else -> "default_exercises.json"
+                }
+
+                // 2. 读取新 JSON
+                // 尝试打开语言特定文件，如果失败则尝试打开默认文件 (default_exercises.json)
+                val jsonString = try {
+                    context.assets.open(fileName).bufferedReader().use { it.readText() }
+                } catch (e: Exception) {
+                    // 如果找不到特定语言文件，尝试加载英文版作为保底
+                    try {
+                        context.assets.open("default_exercises.json").bufferedReader().use { it.readText() }
+                    } catch (e2: Exception) {
+                        // 如果英文版也没有，尝试 exercises_en.json
+                        context.assets.open("exercises_en.json").bufferedReader().use { it.readText() }
+                    }
+                }
+                // 3. [关键步骤] 获取现有动作的 ID 映射表 (Name -> ID)
+                // 这样我们可以找到同名动作的旧 ID，从而实现覆盖更新
+                val listType = object : TypeToken<List<ExerciseTemplate>>() {}.type
+                // [注意] 这里定义为 rawTemplates，表示原始数据
+                val rawTemplates: List<ExerciseTemplate> = Gson().fromJson(jsonString, listType)
+
+                // 4. [关键步骤] 获取现有动作的 ID 映射表 (Name -> ID)
+                // 目的：如果数据库里已经有这个名字，使用旧 ID (触发更新)；否则使用 0 (触发插入)
+                val existingTemplates = dao.getAllTemplatesSync()
+                val nameIdMap = existingTemplates.associate { it.name to it.id }
+
+                val finalTemplates = rawTemplates.map { newTemp ->
+                    val targetId = nameIdMap[newTemp.name] ?: 0L
+                    newTemp.copy(id = targetId)
+                }
+
+                // 5. 批量写入 (使用处理过的 finalTemplates)
+                dao.insertTemplates(finalTemplates)
+
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, context.getString(R.string.import_success), Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    // 拼接错误信息
+                    val errorMsg = context.getString(R.string.import_error) + ": ${e.message}"
+                    Toast.makeText(context, errorMsg, Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
     suspend fun optimizeExerciseLibrary(): Int = 0
+    // [新增 3] 获取动作的 LogType，用于图表页自动判断显示模式
+    fun getLogTypeForExercise(name: String): Flow<Int> {
+        return historyRecords.map { list ->
+            // 找到该动作的最新一条记录，获取其 logType
+            list.find { it.name == name }?.logType ?: LogType.WEIGHT_REPS.value
+        }
+    }
 }
+

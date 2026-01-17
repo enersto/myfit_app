@@ -72,6 +72,8 @@ import kotlinx.coroutines.launch
 
 import com.example.myfit.viewmodel.TimerPhase
 
+import com.example.myfit.model.LogType           // [新增]
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DailyPlanScreen(viewModel: MainViewModel, navController: NavController) {
@@ -210,12 +212,15 @@ fun AdvancedTaskItem(
     val context = LocalContext.current
 
     Card(
-        modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { expanded = !expanded },
         colors = CardDefaults.cardColors(containerColor = cardBgColor),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = if (isCompleted) 0.dp else 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            // --- 顶部行：名称、标签、打卡按钮 (保持原有逻辑) ---
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -225,9 +230,15 @@ fun AdvancedTaskItem(
                         fontWeight = FontWeight.Bold,
                         textDecoration = if (isCompleted) androidx.compose.ui.text.style.TextDecoration.LineThrough else null
                     )
-                    Row(modifier = Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.padding(top = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         if (task.isUnilateral) {
-                            Surface(color = MaterialTheme.colorScheme.tertiaryContainer, shape = RoundedCornerShape(4.dp)) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.tertiaryContainer,
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
                                 Text(
                                     stringResource(R.string.label_unilateral_mode),
                                     fontSize = 10.sp,
@@ -237,7 +248,11 @@ fun AdvancedTaskItem(
                             }
                             Spacer(modifier = Modifier.width(6.dp))
                         }
-                        Text(text = "$bodyPartLabel | $equipLabel", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        Text(
+                            text = "$bodyPartLabel | $equipLabel",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.Gray
+                        )
                     }
                 }
                 Spacer(modifier = Modifier.width(12.dp))
@@ -246,6 +261,7 @@ fun AdvancedTaskItem(
                     val newState = !task.isCompleted
                     var updatedTask = task.copy(isCompleted = newState)
 
+                    // 自动填充逻辑：如果有氧/核心任务打卡，且未填数据，自动填入目标值
                     if (newState && (task.category == "CARDIO" || task.category == "CORE")) {
                         val filledSets = task.sets.map { set ->
                             if (set.weightOrDuration.isBlank()) {
@@ -265,27 +281,51 @@ fun AdvancedTaskItem(
                 })
             }
 
+            // --- 展开区域：组列表 ---
             AnimatedVisibility(visible = expanded) {
                 Column(modifier = Modifier.padding(top = 16.dp)) {
                     HorizontalDivider(color = Color.LightGray.copy(alpha = 0.3f))
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    val isStrength = task.category.uppercase().trim() == "STRENGTH"
+                    // [修改] 使用 LogType 判断显示模式
+                    val isTimer = task.logType == LogType.DURATION.value
 
-                    if (isStrength) {
+                    if (!isTimer) {
+                        // --- 力量/计次 模式 ---
+                        val isRepsOnly = task.logType == LogType.REPS_ONLY.value
+
+                        // 表头行 (根据 isRepsOnly 动态隐藏 "重量/时间" 列)
                         Row(Modifier.fillMaxWidth()) {
-                            Text(stringResource(R.string.header_set_no), modifier = Modifier.weight(0.5f), fontSize = 12.sp, color = Color.Gray)
-                            Text(stringResource(R.string.header_weight_time), modifier = Modifier.weight(1f), fontSize = 12.sp, color = Color.Gray)
-                            Text(stringResource(R.string.header_reps), modifier = Modifier.weight(1f), fontSize = 12.sp, color = Color.Gray)
+                            Text(
+                                text = stringResource(R.string.header_set_no),
+                                modifier = Modifier.weight(0.5f),
+                                fontSize = 12.sp,
+                                color = Color.Gray
+                            )
+                            if (!isRepsOnly) {
+                                Text(
+                                    text = stringResource(R.string.header_weight_time),
+                                    modifier = Modifier.weight(1f),
+                                    fontSize = 12.sp,
+                                    color = Color.Gray
+                                )
+                            }
+                            Text(
+                                text = stringResource(R.string.header_reps),
+                                modifier = Modifier.weight(1f),
+                                fontSize = 12.sp,
+                                color = Color.Gray
+                            )
                         }
                         Spacer(modifier = Modifier.height(4.dp))
+
                         task.sets.forEachIndexed { index, set ->
-                            // [关键修复] 传递具名参数，消除歧义
                             SetRow(
                                 index = index,
                                 set = set,
                                 color = themeColor,
                                 isUnilateral = task.isUnilateral,
+                                isRepsOnly = isRepsOnly, // [新增参数] 传递给 SetRow
                                 onUpdate = { updatedSet ->
                                     val newSets = task.sets.toMutableList()
                                     newSets[index] = updatedSet
@@ -295,6 +335,10 @@ fun AdvancedTaskItem(
                             Spacer(modifier = Modifier.height(6.dp))
                         }
                     } else {
+                        // --- 计时模式 ---
+                        // [新增] 核心运动显示秒数输入框
+                        val showSeconds = task.category == "CORE"
+
                         task.sets.forEachIndexed { index, set ->
                             TimerSetRow(
                                 index = index,
@@ -303,9 +347,11 @@ fun AdvancedTaskItem(
                                 taskId = task.id,
                                 timerState = timerState,
                                 themeColor = themeColor,
-                                onStart = { min ->
+                                showSeconds = showSeconds, // [新增参数] 传递给 TimerSetRow
+                                onStart = { minutesFloat ->
                                     onRequestPermission()
-                                    viewModel.startTimer(context, task.id, index, min)
+                                    // 注意：ViewModel目前只接受Int分钟，暂时转换，后续建议升级ViewModel支持Float
+                                    viewModel.startTimer(context, task.id, index, minutesFloat)
                                 },
                                 onPause = { viewModel.pauseTimer(context) },
                                 onStop = { viewModel.stopTimer(context) },
@@ -314,14 +360,18 @@ fun AdvancedTaskItem(
                                     viewModel.updateTask(task.copy(sets = newSets))
                                 }
                             )
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color.LightGray.copy(alpha = 0.2f))
+                            HorizontalDivider(
+                                modifier = Modifier.padding(vertical = 8.dp),
+                                color = Color.LightGray.copy(alpha = 0.2f)
+                            )
                         }
                     }
 
+                    // 添加组按钮 (保持不变)
                     TextButton(
                         onClick = {
                             val lastSet = task.sets.lastOrNull()
-                            // [关键修复] 创建新 WorkoutSet 时使用具名参数
+                            // 创建新组，继承上一组的数据
                             val newSet = WorkoutSet(
                                 setNumber = task.sets.size + 1,
                                 weightOrDuration = lastSet?.weightOrDuration ?: "",
@@ -353,6 +403,7 @@ fun SetRow(
     set: WorkoutSet,
     color: Color,
     isUnilateral: Boolean = false,
+    isRepsOnly: Boolean = false, // [新增参数]
     onUpdate: (WorkoutSet) -> Unit
 ) {
     var weightInput by remember(set.weightOrDuration) { mutableStateOf(set.weightOrDuration) }
@@ -367,7 +418,12 @@ fun SetRow(
         if (isUnilateral) {
             Column(modifier = Modifier.weight(2f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(R.string.label_side_left), fontSize = 10.sp, color = Color.Gray, modifier = Modifier.width(12.dp))
+                    Text(
+                        text = stringResource(R.string.label_side_left),
+                        fontSize = 10.sp,
+                        color = Color.Gray,
+                        modifier = Modifier.defaultMinSize(minWidth = 20.dp).padding(end = 4.dp)
+                    )
                     InputBox(weightInput, color, Modifier.weight(1f)) {
                         weightInput = it
                         onUpdate(set.copy(weightOrDuration = it))
@@ -380,7 +436,12 @@ fun SetRow(
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(R.string.label_side_right), fontSize = 10.sp, color = Color.Gray, modifier = Modifier.width(12.dp))
+                    Text(
+                        text = stringResource(R.string.label_side_right),
+                        fontSize = 10.sp,
+                        color = Color.Gray,
+                        modifier = Modifier.defaultMinSize(minWidth = 20.dp).padding(end = 4.dp)
+                    )
                     InputBox(rightWeightInput, color, Modifier.weight(1f)) {
                         rightWeightInput = it
                         onUpdate(set.copy(rightWeight = it))
@@ -393,9 +454,11 @@ fun SetRow(
                 }
             }
         } else {
-            InputBox(weightInput, color, Modifier.weight(1f).padding(end = 8.dp)) {
+            if (!isRepsOnly) {
+                InputBox(weightInput, color, Modifier.weight(1f).padding(end = 8.dp)) {
                 weightInput = it
                 onUpdate(set.copy(weightOrDuration = it))
+            }
             }
             InputBox(repsInput, color, Modifier.weight(1f)) {
                 repsInput = it
@@ -435,13 +498,17 @@ fun TimerSetRow(
     taskId: Long,
     timerState: MainViewModel.TimerState,
     themeColor: Color,
-    onStart: (Int) -> Unit,
+    showSeconds: Boolean = false, // [新增] 控制是否显示秒
+    onStart: (Float) -> Unit,     // [修改] 参数类型改为 Float
     onPause: () -> Unit,
     onStop: () -> Unit,
     onRemove: () -> Unit
 ) {
     val isActive = timerState.taskId == taskId && timerState.setIndex == index
+
+    // 输入状态
     var inputMinutes by remember { mutableStateOf(defaultDuration) }
+    var inputSeconds by remember { mutableStateOf(if (showSeconds) "30" else "0") } // 秒数默认值
 
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -458,64 +525,80 @@ fun TimerSetRow(
 
         Box(modifier = Modifier.weight(1f).padding(horizontal = 8.dp), contentAlignment = Alignment.CenterStart) {
             if (isActive) {
+                // --- 倒计时显示逻辑 ---
                 val s = timerState.remainingSeconds
                 val timeStr = String.format("%02d:%02d", s / 60, s % 60)
-
-                // 判断当前是否处于“准备阶段”
                 val isPrep = timerState.phase == TimerPhase.PREP
-                // 准备阶段显示橙色，正式训练显示原本的主题色
                 val displayColor = if (isPrep) Color(0xFFFF9800) else themeColor
 
                 Column(horizontalAlignment = Alignment.Start) {
-                    // 如果是准备阶段，额外显示一行小字 "PREP"
                     if (isPrep) {
-                        Text(
-                            text = "PREP", // 或者 stringResource(R.string.timer_phase_prep)
-                            style = MaterialTheme.typography.labelSmall,
-                            color = displayColor,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Text("PREP", style = MaterialTheme.typography.labelSmall, color = displayColor, fontWeight = FontWeight.Bold)
                     }
-                    // 显示时间，颜色跟随状态变化
-                    Text(
-                        text = timeStr,
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = displayColor,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Text(timeStr, style = MaterialTheme.typography.headlineMedium, color = displayColor, fontWeight = FontWeight.Bold)
                 }
             } else if (set.weightOrDuration.isNotBlank() && (set.weightOrDuration.contains("min") || set.reps == "Done")) {
                 Text(text = "✅ ${set.weightOrDuration}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.tertiary)
             } else {
+                // --- 输入框逻辑 ---
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(4.dp), modifier = Modifier.width(80.dp)) {
+                    // 分钟输入
+                    Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(4.dp), modifier = Modifier.width(50.dp)) {
                         BasicTextField(
                             value = inputMinutes,
                             onValueChange = { if (it.all { char -> char.isDigit() }) inputMinutes = it },
                             textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp, fontWeight = FontWeight.Medium),
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                            modifier = Modifier.padding(8.dp),
                             cursorBrush = SolidColor(themeColor)
                         )
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
                     Text(stringResource(R.string.label_min), fontSize = 14.sp, color = Color.Gray)
+
+                    // [新增] 秒数输入 (仅当 showSeconds=true 时显示)
+                    if (showSeconds) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(4.dp), modifier = Modifier.width(50.dp)) {
+                            BasicTextField(
+                                value = inputSeconds,
+                                onValueChange = { if (it.length <= 2 && it.all { c -> c.isDigit() }) inputSeconds = it },
+                                textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp, fontWeight = FontWeight.Medium),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.padding(8.dp),
+                                cursorBrush = SolidColor(themeColor)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(stringResource(R.string.label_sec), fontSize = 12.sp, color = Color.Gray)
+                    }
                 }
             }
         }
 
+        // 按钮区域
         Row {
             if (isActive) {
                 if (timerState.isRunning) {
-                    IconButton(onClick = onPause) { Icon(Icons.Default.Pause, contentDescription = stringResource(R.string.timer_pause), tint = Color.Gray) }
+                    IconButton(onClick = onPause) { Icon(Icons.Default.Pause, contentDescription = "Pause", tint = Color.Gray) }
                 } else {
-                    IconButton(onClick = { onStart(timerState.totalSeconds / 60) }) { Icon(Icons.Default.PlayArrow, contentDescription = stringResource(R.string.timer_resume), tint = themeColor) }
+                    // [修复] 恢复计时：使用 60f 强制转换为 Float，解决编译错误
+                    IconButton(onClick = { onStart(timerState.totalSeconds / 60f) }) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = "Resume", tint = themeColor)
+                    }
                 }
-                IconButton(onClick = onStop) { Icon(Icons.Default.Stop, contentDescription = stringResource(R.string.timer_stop), tint = Color.Red) }
+                IconButton(onClick = onStop) { Icon(Icons.Default.Stop, contentDescription = "Stop", tint = Color.Red) }
             } else if (set.weightOrDuration.isBlank()) {
-                IconButton(onClick = { val minutes = inputMinutes.toIntOrNull() ?: 30; onStart(minutes) }) {
-                    Icon(Icons.Default.PlayCircle, contentDescription = stringResource(R.string.timer_start), tint = themeColor, modifier = Modifier.size(32.dp))
+                // [修复] 开始计时：计算 Float 类型的总分钟数，解决编译错误
+                IconButton(onClick = {
+                    val m = inputMinutes.toIntOrNull() ?: 0
+                    val s = inputSeconds.toIntOrNull() ?: 0
+                    val totalMin = m + (s / 60f) // 这里结果是 Float
+                    onStart(totalMin)
+                }) {
+                    Icon(Icons.Default.PlayCircle, contentDescription = "Start", tint = themeColor, modifier = Modifier.size(32.dp))
                 }
                 IconButton(onClick = onRemove) { Icon(Icons.Default.Delete, contentDescription = "Remove", tint = Color.LightGray) }
             } else {

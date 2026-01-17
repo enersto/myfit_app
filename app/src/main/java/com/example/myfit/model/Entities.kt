@@ -37,7 +37,11 @@ data class ExerciseTemplate(
     val bodyPart: String = "", // V5.0 新增: 训练部位 (存储资源Key或自定义文本)
     val equipment: String = "", // V5.0 新增: 器械 (存储资源Key或自定义文本)
     val isDeleted: Boolean = false,
-    val isUnilateral: Boolean = false // [新增] 是否为单边动作
+    val isUnilateral: Boolean = false, // [新增] 是否为单边动作
+    // [新增] 1. 记录类型
+    val logType: Int = 0,
+    // [新增] 2. 动作说明
+    val instruction: String = ""
 )
 
 @Entity(tableName = "schedule_config")
@@ -62,7 +66,9 @@ data class WorkoutTask(
     var isCompleted: Boolean = false, // 必须是 var 才能被 toggle
     var target: String = "",          // 兼容旧 UI
     var actualWeight: String = "",     // 兼容旧 UI
-    val isUnilateral: Boolean = false // [新增] 继承自 Template，方便 UI 判断
+    val isUnilateral: Boolean = false, // [新增] 继承自 Template，方便 UI 判断
+    // [新增] 记录类型 (必须同步到 Task，因为 Template 可能会变，但历史记录不能变)
+    val logType: Int = 0
 )
 
 @Entity(tableName = "weight_records")
@@ -83,8 +89,20 @@ data class WeeklyRoutineItem(
     // V5.2 新增字段，提供默认值以兼容旧代码构造
     val bodyPart: String = "",
     val equipment: String = "",
-    val isUnilateral: Boolean = false // [新增]
+    val isUnilateral: Boolean = false, // [新增]
+    val logType: Int = 0
 )
+
+// [新增] 记录类型枚举
+enum class LogType(val value: Int) {
+    WEIGHT_REPS(0), // 默认：负重 x 次数
+    DURATION(1),    // 计时
+    REPS_ONLY(2);   // 仅次数
+
+    companion object {
+        fun fromInt(value: Int) = entries.find { it.value == value } ?: WEIGHT_REPS
+    }
+}
 
 enum class DayType(val labelResId: Int, val colorHex: Long) {
     CORE(R.string.type_core, 0xFFFF5722),

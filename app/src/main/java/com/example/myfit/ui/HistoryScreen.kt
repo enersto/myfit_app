@@ -269,7 +269,7 @@ fun HistoryCharts(viewModel: MainViewModel) {
                 viewModel = viewModel,
                 category = "CARDIO",
                 title = stringResource(R.string.chart_title_cardio_single),
-                mode = 0 // 时长
+                defaultMode = 0 // 时长
             )
         }
 
@@ -287,7 +287,7 @@ fun HistoryCharts(viewModel: MainViewModel) {
                 viewModel = viewModel,
                 category = "STRENGTH",
                 title = stringResource(R.string.chart_title_strength_single),
-                mode = 1 // 重量
+                defaultMode = 1 // 重量
             )
         }
 
@@ -305,7 +305,7 @@ fun HistoryCharts(viewModel: MainViewModel) {
                 viewModel = viewModel,
                 category = "CORE",
                 title = stringResource(R.string.chart_title_core_single),
-                mode = 2 // 次数
+                defaultMode = 2 // 次数
             )
         }
 

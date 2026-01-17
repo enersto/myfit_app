@@ -15,6 +15,8 @@ import com.example.myfit.util.LocaleHelper
 import com.example.myfit.viewmodel.MainViewModel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 
 class MainActivity : ComponentActivity() {
     // 使用 viewModels() 委托获取 ViewModel 实例

@@ -12,6 +12,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import androidx.room.migration.Migration
+import com.google.gson.Gson // [修复] 添加 Gson 引用
+import com.google.gson.reflect.TypeToken // [修复] 添加 TypeToken 引用
 
 val MIGRATION_7_8 = object : Migration(7, 8) {
     override fun migrate(database: SupportSQLiteDatabase) {}
@@ -49,6 +51,32 @@ val MIGRATION_10_11 = object : Migration(10, 11) {
     }
 }
 
+// [新增] MIGRATION_11_12
+val MIGRATION_11_12 = object : Migration(11, 12) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        // 1. 添加 logType 列 (默认为 0: WEIGHT_REPS)
+        database.execSQL("ALTER TABLE exercise_templates ADD COLUMN logType INTEGER NOT NULL DEFAULT 0")
+        database.execSQL("ALTER TABLE workout_tasks ADD COLUMN logType INTEGER NOT NULL DEFAULT 0")
+        database.execSQL("ALTER TABLE weekly_routine ADD COLUMN logType INTEGER NOT NULL DEFAULT 0")
+
+        // 2. 添加 instruction 列
+        database.execSQL("ALTER TABLE exercise_templates ADD COLUMN instruction TEXT NOT NULL DEFAULT ''")
+
+        // 3. 数据清洗与迁移逻辑
+        // 3.1 有氧运动 (CARDIO) -> 统一设为 DURATION (1)
+        database.execSQL("UPDATE exercise_templates SET logType = 1 WHERE category = 'CARDIO'")
+        database.execSQL("UPDATE workout_tasks SET logType = 1 WHERE category = 'CARDIO'")
+        database.execSQL("UPDATE weekly_routine SET logType = 1 WHERE category = 'CARDIO'")
+
+        // 3.2 核心运动 (CORE) -> 统一先设为 DURATION (1)，保持旧版本计时习惯
+        database.execSQL("UPDATE exercise_templates SET logType = 1 WHERE category = 'CORE'")
+        database.execSQL("UPDATE workout_tasks SET logType = 1 WHERE category = 'CORE'")
+        database.execSQL("UPDATE weekly_routine SET logType = 1 WHERE category = 'CORE'")
+
+        // 3.3 力量训练 (STRENGTH) -> 保持默认 0 (WEIGHT_REPS)，无需操作
+    }
+}
+
 
 @Database(
     entities = [
@@ -59,7 +87,7 @@ val MIGRATION_10_11 = object : Migration(10, 11) {
         AppSetting::class,
         WeeklyRoutineItem::class
     ],
-    version = 11, // 🔴 升级版本号到 11
+    version = 12, // 🔴 升级版本号
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -72,19 +100,27 @@ abstract class AppDatabase : RoomDatabase() {
         fun getDatabase(context: Context): AppDatabase {
             return instance ?: synchronized(this) {
                 Room.databaseBuilder(context, AppDatabase::class.java, "myfit_v7.db")
-                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11) // 🔴 添加新迁移
-                    .addCallback(PrepopulateCallback())
+                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11,
+                        MIGRATION_11_12
+                        ) // 🔴 添加新迁移
+                    .addCallback(PrepopulateCallback(context.applicationContext))
                     .build().also { instance = it }
             }
         }
     }
 
-    private class PrepopulateCallback : RoomDatabase.Callback() {
+    // [修复] 类定义中添加构造函数接收 context
+    private class PrepopulateCallback(private val context: Context) : RoomDatabase.Callback() {
         override fun onCreate(db: SupportSQLiteDatabase) {
             super.onCreate(db)
             instance?.let { database ->
                 CoroutineScope(Dispatchers.IO).launch {
                     val dao = database.workoutDao()
+
+                    // 1. 保存默认设置 (根据系统语言决定默认 app 语言)
+                    val sysLang = java.util.Locale.getDefault().language // "zh", "en", "ja"...
+                    // 确保是我们支持的语言，否则默认 en
+                    val defaultAppLang = if (sysLang in listOf("zh", "en", "ja", "de", "es")) sysLang else "zh"
 
                     dao.saveAppSettings(AppSetting(themeId = 1, languageCode = "zh"))
 
@@ -94,19 +130,27 @@ abstract class AppDatabase : RoomDatabase() {
                     }
 
                     if (dao.getTemplateCount() == 0) {
-                        val defaults = listOf(
-                            ExerciseTemplate(name = "坐姿推胸", defaultTarget = "3x12", category = "STRENGTH", bodyPart = "part_chest", equipment = "equip_machine"),
-                            ExerciseTemplate(name = "高位下拉", defaultTarget = "3x12", category = "STRENGTH", bodyPart = "part_back", equipment = "equip_machine"),
-                            ExerciseTemplate(name = "深蹲", defaultTarget = "4x10", category = "STRENGTH", bodyPart = "part_legs", equipment = "equip_barbell"),
-                            ExerciseTemplate(name = "硬拉", defaultTarget = "4x8", category = "STRENGTH", bodyPart = "part_back", equipment = "equip_barbell"),
-                            // 哑铃侧平举是典型的单边/双边动作，默认暂设为false，用户可修改
-                            ExerciseTemplate(name = "哑铃侧平举", defaultTarget = "4x15", category = "STRENGTH", bodyPart = "part_shoulders", equipment = "equip_dumbbell"),
-                            ExerciseTemplate(name = "平板支撑", defaultTarget = "3x60s", category = "CORE", bodyPart = "part_abs", equipment = "equip_bodyweight"),
-                            ExerciseTemplate(name = "卷腹", defaultTarget = "4x20", category = "CORE", bodyPart = "part_abs", equipment = "equip_bodyweight"),
-                            ExerciseTemplate(name = "热身跑", defaultTarget = "5 min", category = "CARDIO", bodyPart = "part_cardio", equipment = "equip_cardio_machine"),
-                            ExerciseTemplate(name = "椭圆仪", defaultTarget = "30 min", category = "CARDIO", bodyPart = "part_cardio", equipment = "equip_cardio_machine")
-                        )
-                        defaults.forEach { dao.insertTemplate(it) }
+                        try {
+                            // 动态决定文件名
+                            val fileName = when (defaultAppLang) {
+                                "en" -> "exercises_en.json"
+                                "ja" -> "exercises_ja.json"
+                                "de" -> "exercises_de.json"
+                                "es" -> "exercises_es.json"
+                                else -> "default_exercises.json" // 默认中文
+                            }
+                            // [逻辑] 读取 assets/fileName
+                            val jsonString = context.assets.open(fileName)
+                                .bufferedReader()
+                                .use { it.readText() }
+
+                            val listType = object : TypeToken<List<ExerciseTemplate>>() {}.type
+                            val templates: List<ExerciseTemplate> = Gson().fromJson(jsonString, listType)
+
+                            dao.insertTemplates(templates)
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
                     }
                 }
             }
