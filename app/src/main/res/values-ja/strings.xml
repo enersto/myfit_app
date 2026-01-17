@@ -243,6 +243,10 @@
 \n3,ジョギング,CARDIO,30min,part_cardio,equip_cardio_machine,false,1
 \n4,クランチ,CORE,4x20,part_abs,equip_bodyweight,false,2</string>
 
+    <string name="log_type_weight_reps">重量 × 回数</string>
+    <string name="log_type_reps_only">回数のみ (自重)</string>
+    <string name="log_type_duration">時間 (タイム)</string>
+
     <string name="title_reset_exercises">ライブラリを更新？</string>
     <string name="msg_reset_exercises_warning">プリセット種目の名称と説明を現在の言語に更新します。作成したカスタム種目には影響しません。</string>
     <string name="btn_confirm">確認</string>

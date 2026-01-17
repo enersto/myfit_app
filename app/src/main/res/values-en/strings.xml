@@ -242,6 +242,10 @@
 \n3,Jogging,CARDIO,30min,part_cardio,equip_cardio_machine,false,1
 \n4,Crunches,CORE,4x20,part_abs,equip_bodyweight,false,2</string>
 
+    <string name="log_type_weight_reps">Weight × Reps</string>
+    <string name="log_type_reps_only">Reps Only (Bodyweight)</string>
+    <string name="log_type_duration">Duration (Time)</string>
+
     <string name="title_reset_exercises">Update Exercise Library?</string>
     <string name="msg_reset_exercises_warning">This will update the names and instructions of standard exercises to the current language. Your custom exercises will not be affected.</string>
     <string name="btn_confirm">Confirm</string>

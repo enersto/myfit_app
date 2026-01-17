@@ -244,6 +244,10 @@
 \n3,Trotar,CARDIO,30min,part_cardio,equip_cardio_machine,false,1
 \n4,Abdominales,CORE,4x20,part_abs,equip_bodyweight,false,2</string>
 
+    <string name="log_type_weight_reps">Peso × Reps</string>
+    <string name="log_type_reps_only">Solo Reps (Peso corporal)</string>
+    <string name="log_type_duration">Tiempo (Duración)</string>
+
     <string name="title_reset_exercises">¿Actualizar biblioteca?</string>
     <string name="msg_reset_exercises_warning">Esto actualizará los nombres e instrucciones de los ejercicios predeterminados al idioma actual. Tus ejercicios personalizados no se verán afectados.</string>
     <string name="btn_confirm">Confirmar</string>

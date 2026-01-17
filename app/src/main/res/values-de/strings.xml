@@ -243,6 +243,10 @@
 \n3,Joggen,CARDIO,30min,part_cardio,equip_cardio_machine,false,1
 \n4,Crunches,CORE,4x20,part_abs,equip_bodyweight,false,2</string>
 
+    <string name="log_type_weight_reps">Gewicht × Wdh.</string>
+    <string name="log_type_reps_only">Nur Wdh. (Körpergewicht)</string>
+    <string name="log_type_duration">Zeit (Dauer)</string>
+
     <string name="title_reset_exercises">Bibliothek aktualisieren?</string>
     <string name="msg_reset_exercises_warning">Dies aktualisiert Namen und Anleitungen der Standardübungen auf die aktuelle Sprache. Eigene Übungen sind nicht betroffen.</string>
     <string name="btn_confirm">Bestätigen</string>
