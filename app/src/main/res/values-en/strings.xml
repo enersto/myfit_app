@@ -251,4 +251,22 @@
     <string name="btn_confirm">Confirm</string>
 
     <string name="btn_update_lib_lang">Change Language</string>
+
+    <string name="action_add_photo">Add Photo</string>
+    <string name="action_change_photo">Change Photo</string>
+    <string name="action_delete_photo">Delete Photo</string>
+    <string name="label_photo">Demo Image</string>
+    <string name="dialog_select_photo">Select Photo Source</string>
+    <string name="source_camera">Take Photo</string>
+    <string name="source_gallery">Choose from Gallery</string>
+    <string name="error_img_permission">Camera or storage permission is required to add photos.</string>
+
+    <string name="hint_tap_title_for_detail">(View Details)</string>
+
+    <string name="action_search">Search</string>
+    <string name="hint_search_exercise">Search name, body part, or equipment...</string>
+    <string name="title_select_exercise">Select Exercise</string>
+    <string name="no_search_results">No matching exercises found</string>
+    <string name="action_clear_search">Clear</string>
+    <string name="msg_added_to_plan">Added "%1$s"</string>
 </resources>

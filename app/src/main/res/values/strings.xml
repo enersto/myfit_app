@@ -254,4 +254,24 @@
 
     <string name="btn_update_lib_lang">更改语言</string>
 
+    <string name="action_add_photo">添加照片</string>
+    <string name="action_change_photo">更换照片</string>
+    <string name="action_delete_photo">删除照片</string>
+    <string name="label_photo">动作演示图</string>
+    <string name="dialog_select_photo">选择照片来源</string>
+    <string name="source_camera">拍照</string>
+    <string name="source_gallery">从相册选择</string>
+    <string name="error_img_permission">需要相机或存储权限才能添加照片</string>
+
+    <string name="hint_tap_title_for_detail">（查看详情）</string>
+
+    <string name="action_search">搜索</string>
+    <string name="hint_search_exercise">搜索动作名称、部位或器械...</string>
+    <string name="title_select_exercise">选择动作</string>
+    <string name="no_search_results">未找到匹配动作</string>
+    <string name="action_clear_search">清除</string>
+    <string name="msg_added_to_plan">已添加「%1$s」</string>
+
+
+
 </resources>

@@ -74,12 +74,21 @@ import com.example.myfit.viewmodel.TimerPhase
 
 import com.example.myfit.model.LogType           // [新增]
 
+// [新增] 用于图片显示
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
+import java.io.File
+import androidx.compose.ui.draw.clip // [检查] 确保有这一行
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DailyPlanScreen(viewModel: MainViewModel, navController: NavController) {
     val date by viewModel.selectedDate.collectAsState()
     val dayType by viewModel.todayScheduleType.collectAsState()
     val tasks by viewModel.todayTasks.collectAsState(initial = emptyList<WorkoutTask>())
+    // [新增] 获取所有动作模板，用于详情页联动
+    val allTemplates by viewModel.allTemplates.collectAsState(initial = emptyList())
+
     val showWeightAlert by viewModel.showWeightAlert.collectAsState()
     val timerState by viewModel.timerState.collectAsStateWithLifecycle()
 
@@ -114,7 +123,7 @@ fun DailyPlanScreen(viewModel: MainViewModel, navController: NavController) {
             containerColor = MaterialTheme.colorScheme.background,
             floatingActionButton = {
                 if (dayType != DayType.REST) {
-                    FloatingActionButton(onClick = { showAddSheet = true }, containerColor = themeColor) {
+                    FloatingActionButton(onClick = { navController.navigate("exercise_selector") }, containerColor = themeColor) {
                         Icon(Icons.Default.Add, contentDescription = "Add", tint = Color.White)
                     }
                 }
@@ -134,6 +143,7 @@ fun DailyPlanScreen(viewModel: MainViewModel, navController: NavController) {
                             SwipeToDeleteContainer<WorkoutTask>(item = task, onDelete = { viewModel.removeTask(task) }) {
                                 AdvancedTaskItem(
                                     task = task,
+                                    allTemplates = allTemplates,
                                     themeColor = themeColor,
                                     viewModel = viewModel,
                                     timerState = timerState,
@@ -194,6 +204,7 @@ fun DailyPlanScreen(viewModel: MainViewModel, navController: NavController) {
 @Composable
 fun AdvancedTaskItem(
     task: WorkoutTask,
+    allTemplates: List<ExerciseTemplate>,
     themeColor: Color,
     viewModel: MainViewModel,
     timerState: MainViewModel.TimerState,
@@ -201,6 +212,8 @@ fun AdvancedTaskItem(
     onRequestPermission: () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
+    // [新增] 详情弹窗控制
+    var showDetailInfo by remember { mutableStateOf(false) }
     val isCompleted = task.isCompleted
     val cardBgColor = if (isCompleted) Color(0xFFF0F0F0) else MaterialTheme.colorScheme.surface
     val contentAlpha = if (isCompleted) 0.5f else 1f
@@ -210,6 +223,29 @@ fun AdvancedTaskItem(
     val equipRes = getEquipmentResId(task.equipment)
     val equipLabel = if (equipRes != 0) stringResource(equipRes) else task.equipment
     val context = LocalContext.current
+
+    // [新增] 如果需要显示详情，这里临时构造一个 Template 对象传给 Dialog
+    // [关键修改] 详情展示逻辑：优先使用实时模板数据
+    if (showDetailInfo) {
+        // 尝试从实时库中找到对应的 Template
+        val liveTemplate = allTemplates.find { it.id == task.templateId }
+
+        // 如果找到了实时模板，就用实时的（含最新图片和说明）；如果找不到（被删了），就用 Task 快照兜底
+        val displayTemplate = liveTemplate ?: ExerciseTemplate(
+            id = task.templateId,
+            name = task.name,
+            category = task.category,
+            bodyPart = task.bodyPart,
+            equipment = task.equipment,
+            isUnilateral = task.isUnilateral,
+            logType = task.logType,
+            instruction = "", // 快照没有说明，所以如果模板被删，这里就是空
+            imageUri = task.imageUri,
+            defaultTarget = task.target
+        )
+
+        ExerciseDetailDialog(template = displayTemplate, onDismiss = { showDetailInfo = false }, onEdit = null)
+    }
 
     Card(
         modifier = Modifier
@@ -222,14 +258,50 @@ fun AdvancedTaskItem(
         Column(modifier = Modifier.padding(16.dp)) {
             // --- 顶部行：名称、标签、打卡按钮 (保持原有逻辑) ---
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = task.name,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        textDecoration = if (isCompleted) androidx.compose.ui.text.style.TextDecoration.LineThrough else null
+
+                // 这样你在管理页改了图，打卡页列表不用展开也能看到新图
+                val liveImageUri = allTemplates.find { it.id == task.templateId }?.imageUri ?: task.imageUri
+
+                // [新增] 图片展示 (如果有) - 逻辑类似 ExerciseMinimalCard
+                if (!task.imageUri.isNullOrBlank()) {
+                    AsyncImage(
+                        model = if (task.imageUri!!.startsWith("/")) File(task.imageUri!!) else task.imageUri,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color.LightGray)
+                            // [交互] 如果 bar 未展开，图片在最左侧；展开后点击图片也可以看大图(可选)
+                            .clickable(enabled = expanded) { showDetailInfo = true },
+                        contentScale = ContentScale.Crop
                     )
+                    Spacer(modifier = Modifier.width(12.dp))
+                }
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = task.name,
+                            color = if (isCompleted) Color.Gray else MaterialTheme.colorScheme.onSurface,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            textDecoration = if (isCompleted) androidx.compose.ui.text.style.TextDecoration.LineThrough else if (expanded) androidx.compose.ui.text.style.TextDecoration.Underline else null,
+                            modifier = Modifier.clickable(enabled = expanded) {
+                                // [交互] 只有展开时，点击标题才弹出详情
+                                showDetailInfo = true
+                            }
+                        )
+                        // [新增] 展开时的提示小图标或文字
+                        if (expanded) {
+                            Text(
+                                text = stringResource(R.string.hint_tap_title_for_detail),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontSize = 8.sp,
+                                modifier = Modifier.padding(start = 4.dp)
+                            )
+                        }
+                    }
                     Row(
                         modifier = Modifier.padding(top = 4.dp),
                         verticalAlignment = Alignment.CenterVertically

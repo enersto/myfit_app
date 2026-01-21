@@ -94,6 +94,11 @@ fun MainScreen(viewModel: MainViewModel) {
                         viewModel = viewModel
                     )
                 }
+
+                // [新增] 动作选择页路由
+                composable("exercise_selector") {
+                    ExerciseSelectionScreen(viewModel = viewModel, navController = navController)
+                }
             }
         }
     }

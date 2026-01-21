@@ -253,4 +253,22 @@
 
     <string name="btn_update_lib_lang">言語を変更</string>
 
+    <string name="action_add_photo">写真を追加</string>
+    <string name="action_change_photo">写真を変更</string>
+    <string name="action_delete_photo">写真を削除</string>
+    <string name="label_photo">デモ画像</string>
+    <string name="dialog_select_photo">写真のソースを選択</string>
+    <string name="source_camera">カメラで撮影</string>
+    <string name="source_gallery">アルバムから選択</string>
+    <string name="error_img_permission">写真を追加するにはカメラまたはストレージの権限が必要です。</string>
+
+    <string name="hint_tap_title_for_detail">（詳細を表示）</string>
+
+    <string name="action_search">検索</string>
+    <string name="hint_search_exercise">種目名、部位、器具で検索...</string>
+    <string name="title_select_exercise">種目を選択</string>
+    <string name="no_search_results">一致する種目がありません</string>
+    <string name="action_clear_search">クリア</string>
+    <string name="msg_added_to_plan">「%1$s」を追加しました</string>
+
 </resources>

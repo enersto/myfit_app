@@ -51,8 +51,24 @@ fun MyFitTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = primaryColor.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = (appTheme.id != 0)
+
+            // [修改 1] 将状态栏设为透明
+            // 解决部分机型显示灰色遮罩的问题，同时消除 'statusBarColor' 相关的视觉不一致
+            // 注意：这需要您的 Scaffold TopBar 正确延伸到顶部（Material3 默认支持）
+            window.statusBarColor = Color.Transparent.toArgb()
+
+            // [修改 2] 精确控制状态栏图标颜色 (黑/白)
+            val insetsController = WindowCompat.getInsetsController(window, view)
+
+            // 逻辑说明：
+            // 如果是深色主题(id=0)，图标必须是白色 -> isAppearanceLightStatusBars = false
+            // 如果是浅色主题(id!=0)，通常背景是浅色，图标应为黑色 -> isAppearanceLightStatusBars = true
+            // *特殊情况*：如果您的 TopBar 是深色（例如用了深绿色的 Primary），那么即使是浅色主题，图标也应该设为白色(false)。
+            // 假设浅色主题下 TopBar 跟随 Primary Color (深色)，则建议全程使用白色图标：
+            // insetsController.isAppearanceLightStatusBars = false
+
+            // 按照您之前的逻辑（浅色主题用黑字）：
+            insetsController.isAppearanceLightStatusBars = (appTheme.id != 0)
         }
     }
 

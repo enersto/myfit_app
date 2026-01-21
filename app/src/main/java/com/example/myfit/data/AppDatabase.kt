@@ -77,6 +77,16 @@ val MIGRATION_11_12 = object : Migration(11, 12) {
     }
 }
 
+// [新增] MIGRATION_12_13：添加 imageUri 字段
+val MIGRATION_12_13 = object : Migration(12, 13) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        // 为三个表添加 imageUri 列，允许为空
+        database.execSQL("ALTER TABLE exercise_templates ADD COLUMN imageUri TEXT")
+        database.execSQL("ALTER TABLE workout_tasks ADD COLUMN imageUri TEXT")
+        database.execSQL("ALTER TABLE weekly_routine ADD COLUMN imageUri TEXT")
+    }
+}
+
 
 @Database(
     entities = [
@@ -87,7 +97,7 @@ val MIGRATION_11_12 = object : Migration(11, 12) {
         AppSetting::class,
         WeeklyRoutineItem::class
     ],
-    version = 12, // 🔴 升级版本号
+    version = 13, // 🔴 升级版本号
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -101,7 +111,7 @@ abstract class AppDatabase : RoomDatabase() {
             return instance ?: synchronized(this) {
                 Room.databaseBuilder(context, AppDatabase::class.java, "myfit_v7.db")
                     .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11,
-                        MIGRATION_11_12
+                        MIGRATION_11_12, MIGRATION_12_13
                         ) // 🔴 添加新迁移
                     .addCallback(PrepopulateCallback(context.applicationContext))
                     .build().also { instance = it }

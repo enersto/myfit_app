@@ -41,7 +41,8 @@ data class ExerciseTemplate(
     // [新增] 1. 记录类型
     val logType: Int = 0,
     // [新增] 2. 动作说明
-    val instruction: String = ""
+    val instruction: String = "",
+    val imageUri: String? = null // [新增] 图片路径
 )
 
 @Entity(tableName = "schedule_config")
@@ -68,7 +69,8 @@ data class WorkoutTask(
     var actualWeight: String = "",     // 兼容旧 UI
     val isUnilateral: Boolean = false, // [新增] 继承自 Template，方便 UI 判断
     // [新增] 记录类型 (必须同步到 Task，因为 Template 可能会变，但历史记录不能变)
-    val logType: Int = 0
+    val logType: Int = 0,
+    val imageUri: String? = null // [新增] 继承自模板的图片
 )
 
 @Entity(tableName = "weight_records")
@@ -90,7 +92,8 @@ data class WeeklyRoutineItem(
     val bodyPart: String = "",
     val equipment: String = "",
     val isUnilateral: Boolean = false, // [新增]
-    val logType: Int = 0
+    val logType: Int = 0,
+    val imageUri: String? = null // [新增]
 )
 
 // [新增] 记录类型枚举

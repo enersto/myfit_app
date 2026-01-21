@@ -25,6 +25,16 @@ import com.example.myfit.R
 import com.example.myfit.viewmodel.MainViewModel
 import java.time.LocalDate
 
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.OutlinedTextField
+
+import androidx.compose.ui.focus.onFocusChanged // [新增 import]
+import androidx.compose.material.icons.filled.Clear // [新增]
+import androidx.compose.material3.MenuAnchorType // 确保有这个 import
+
 import com.example.myfit.model.LogType           // [新增]
 
 enum class ChartGranularity { DAILY, MONTHLY }
@@ -97,25 +107,20 @@ fun GranularityButton(text: String, isSelected: Boolean, onClick: () -> Unit) {
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SingleExerciseSection(
     viewModel: MainViewModel,
     category: String,
     title: String,
-    // [注意] 这里的 mode 参数保留用于兼容，但在内部逻辑中，我们会优先使用动作自身的 LogType
     defaultMode: Int = 1
 ) {
     var selectedExercise by remember { mutableStateOf("") }
-    // 0=左/默认, 1=右
     var selectedSide by remember { mutableStateOf(0) }
 
     val exercises by viewModel.getExerciseNamesByCategory(category).collectAsStateWithLifecycle(initialValue = emptyList())
-
-    // [关键恢复] 获取历史记录以判断属性
     val history by viewModel.historyRecords.collectAsStateWithLifecycle(initialValue = emptyList())
 
-    // [逻辑] 判断当前选中的动作是否为单边动作
-    // 只要历史记录里有一条该名称的记录标记为 isUnilateral=true，就视为单边动作
     val isUnilateral by remember(selectedExercise, history) {
         derivedStateOf {
             if (selectedExercise.isEmpty()) false
@@ -123,54 +128,111 @@ fun SingleExerciseSection(
         }
     }
 
-    // 2. [关键新增] 获取动作的 LogType
     val logType by remember(selectedExercise) {
         viewModel.getLogTypeForExercise(selectedExercise)
     }.collectAsStateWithLifecycle(initialValue = LogType.WEIGHT_REPS.value)
 
+    // --- 下拉框状态管理 ---
     var expanded by remember { mutableStateOf(false) }
+    var searchText by remember { mutableStateOf("") }
+    // 标记是否由用户正在输入（用于区分“选中后的回显”和“用户正在打字”）
+    var isUserInput by remember { mutableStateOf(false) }
+
+    // 初始化默认值 (仅当未选中且有数据时执行一次)
+    LaunchedEffect(exercises) {
+        if (selectedExercise.isEmpty() && exercises.isNotEmpty()) {
+            selectedExercise = exercises.first()
+            searchText = exercises.first()
+            isUserInput = false // 这是系统自动填入的
+        }
+    }
+
+    // 过滤逻辑优化：
+    // 1. 如果下拉框未展开，不进行过滤计算（节省资源）。
+    // 2. 如果是用户正在输入 (isUserInput=true)，则按输入内容过滤。
+    // 3. 如果不是用户输入 (例如刚选中，或者刚点开但内容是完整的动作名)，则显示所有选项，方便切换。
+    val filteredOptions = remember(exercises, searchText, expanded, isUserInput) {
+        if (!expanded) exercises
+        else {
+            if (isUserInput && searchText.isNotEmpty()) {
+                // 用户正在打字，进行过滤
+                exercises.filter { it.contains(searchText, ignoreCase = true) }
+            } else {
+                // 刚点开，或者内容为空，显示所有
+                exercises
+            }
+        }
+    }
 
     if (exercises.isNotEmpty()) {
-        if (selectedExercise.isEmpty()) selectedExercise = exercises.first()
-
         Column {
-            // 1. 下拉选择器
-            Box(modifier = Modifier.wrapContentSize(Alignment.TopStart)) {
-                OutlinedButton(
-                    onClick = { expanded = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    Text(selectedExercise, style = MaterialTheme.typography.bodyMedium)
-                    Spacer(modifier = Modifier.weight(1f))
-                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Select")
-                }
+            // 1. 可搜索的下拉选择器
+            ExposedDropdownMenuBox(
+                expanded = expanded,
+                onExpandedChange = { expanded = !expanded }
+            ) {
+                OutlinedTextField(
+                    value = searchText,
+                    onValueChange = {
+                        searchText = it
+                        expanded = true // 输入时自动展开
+                        isUserInput = true // 标记为用户正在输入
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
+                        .onFocusChanged { focusState ->
+                            // 当获得焦点时，如果内容就是当前选中的动作，标记为非用户输入，以便显示全列表
+                            if (focusState.isFocused) {
+                                isUserInput = false
+                                expanded = true
+                            }
+                        },
+                    label = { Text(stringResource(R.string.title_select_exercise)) },
+                    trailingIcon = {
+                        // 如果有文字且正在输入/获得焦点，显示清除按钮；否则显示下拉箭头
+                        if (searchText.isNotEmpty() && expanded) {
+                            IconButton(onClick = {
+                                searchText = ""
+                                isUserInput = true
+                                expanded = true
+                            }) {
+                                Icon(Icons.Default.Clear, contentDescription = "Clear") // 需确保 import Icons.Default.Clear
+                            }
+                        } else {
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                        }
+                    },
+                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                    singleLine = true
+                )
 
-                DropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = { expanded = false },
-                    modifier = Modifier.heightIn(max = 300.dp)
-                ) {
-                    exercises.forEach { name ->
-                        val isSelected = (name == selectedExercise)
-                        val textColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = name,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                )
-                            },
-                            onClick = {
-                                selectedExercise = name
-                                expanded = false
-                                selectedSide = 0 // 切换动作时重置为左边
-                            },
-                            colors = MenuDefaults.itemColors(
-                                textColor = textColor
+                if (filteredOptions.isNotEmpty()) {
+                    ExposedDropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false },
+                        modifier = Modifier.heightIn(max = 300.dp)
+                    ) {
+                        filteredOptions.forEach { selectionOption ->
+                            DropdownMenuItem(
+                                text = {
+                                    val isSelected = selectionOption == selectedExercise
+                                    Text(
+                                        text = selectionOption,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                    )
+                                },
+                                onClick = {
+                                    selectedExercise = selectionOption
+                                    searchText = selectionOption
+                                    isUserInput = false // 选中后，不再视为用户正在输入
+                                    expanded = false
+                                    selectedSide = 0
+                                },
+                                contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
                             )
-                        )
+                        }
                     }
                 }
             }

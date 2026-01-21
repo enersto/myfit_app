@@ -254,4 +254,22 @@
 
     <string name="btn_update_lib_lang">Cambiar idioma</string>
 
+    <string name="action_add_photo">Añadir foto</string>
+    <string name="action_change_photo">Cambiar foto</string>
+    <string name="action_delete_photo">Eliminar foto</string>
+    <string name="label_photo">Imagen de muestra</string>
+    <string name="dialog_select_photo">Seleccionar origen</string>
+    <string name="source_camera">Cámara</string>
+    <string name="source_gallery">Galería</string>
+    <string name="error_img_permission">Se requiere permiso de cámara o almacenamiento.</string>
+
+    <string name="hint_tap_title_for_detail">(Ver detalles)</string>
+
+    <string name="action_search">Buscar</string>
+    <string name="hint_search_exercise">Buscar por nombre, zona o equipo...</string>
+    <string name="title_select_exercise">Seleccionar ejercicio</string>
+    <string name="no_search_results">No se encontraron resultados</string>
+    <string name="action_clear_search">Borrar</string>
+    <string name="msg_added_to_plan">"%1$s" añadido</string>
+
 </resources>

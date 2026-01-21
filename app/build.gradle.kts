@@ -15,8 +15,8 @@ android {
         applicationId = "com.example.myfit"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5810
-        versionName = "5.8.10"
+        versionCode = 5815
+        versionName = "5.8.15"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -73,6 +73,8 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended:1.6.0")
 
     implementation("com.google.code.gson:gson:2.10.1") // 新增：用于处理复杂数据结构
+
+    implementation("io.coil-kt:coil-compose:2.6.0") // 加载图片
 
 
 }
